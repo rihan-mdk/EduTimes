@@ -32,16 +32,17 @@ function initMemoryDb() {
   const migration2 = fs.readFileSync(path.join(__dirname, '../../migrations/002_seed_data.sql'), 'utf8');
   const migration3 = fs.readFileSync(path.join(__dirname, '../../migrations/003_add_subject_parallel_and_block_columns.sql'), 'utf8');
   const migration4 = fs.readFileSync(path.join(__dirname, '../../migrations/004_add_generic_activity_and_session_type.sql'), 'utf8');
+  const migration5 = fs.readFileSync(path.join(__dirname, '../../migrations/005_add_department_code.sql'), 'utf8');
 
   try {
     memDb.public.none(migration1);
     memDb.public.none(migration2);
-    // Migrations 003 & 004: these ALTER TABLE statements may be no-ops in pg-mem
+    // Migrations 003, 004 & 005: ALTER TABLE statements may be no-ops in pg-mem
     // since the columns are already defined in migration 001 above.
-    // Wrapped individually so one failure doesn't block the others.
     try { memDb.public.none(migration3); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration4); } catch (e) { /* column already exists */ }
-    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-004!');
+    try { memDb.public.none(migration5); } catch (e) { /* column already exists */ }
+    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-005!');
   } catch (err) {
     console.warn('Memory DB init note:', err.message);
   }

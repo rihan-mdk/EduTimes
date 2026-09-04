@@ -2,17 +2,29 @@ const db = require('../config/db');
 
 async function getAllSubjects(req, res) {
   try {
-    const result = await db.query(`
+    const { department_id } = req.query;
+    let query = `
       SELECT sub.*, 
              sem.number as semester_number, 
              sem.class_room, 
+             sem.department_id,
+             d.name as department_name,
+             d.code as department_code,
              f.name as faculty_name, 
              f.faculty_code
       FROM subject sub
       LEFT JOIN semester sem ON sub.semester_id = sem.id
+      LEFT JOIN department d ON sem.department_id = d.id
       LEFT JOIN faculty f ON sub.faculty_id = f.id
-      ORDER BY sem.number ASC, sub.id ASC
-    `);
+    `;
+    const params = [];
+    if (department_id) {
+      params.push(department_id);
+      query += ` WHERE sem.department_id = $${params.length}`;
+    }
+    query += ` ORDER BY sem.number ASC, sub.id ASC`;
+
+    const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('[Subject] Error fetching all subjects:', err);
@@ -25,10 +37,14 @@ async function getSubjectById(req, res) {
     const result = await db.query(`
       SELECT sub.*, 
              sem.number as semester_number, 
+             sem.department_id,
+             d.name as department_name,
+             d.code as department_code,
              f.name as faculty_name, 
              f.faculty_code
       FROM subject sub
       LEFT JOIN semester sem ON sub.semester_id = sem.id
+      LEFT JOIN department d ON sem.department_id = d.id
       LEFT JOIN faculty f ON sub.faculty_id = f.id
       WHERE sub.id = $1
     `, [req.params.id]);

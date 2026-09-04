@@ -2,12 +2,20 @@ const db = require('../config/db');
 
 async function getAllSemesters(req, res) {
   try {
-    const result = await db.query(`
-      SELECT s.*, d.name as department_name
+    const { department_id } = req.query;
+    let query = `
+      SELECT s.*, d.name as department_name, d.code as department_code
       FROM semester s
       LEFT JOIN department d ON s.department_id = d.id
-      ORDER BY s.number ASC
-    `);
+    `;
+    const params = [];
+    if (department_id) {
+      params.push(department_id);
+      query += ` WHERE s.department_id = $${params.length}`;
+    }
+    query += ` ORDER BY s.number ASC`;
+
+    const result = await db.query(query, params);
     res.json(result.rows);
   } catch (err) {
     console.error('[Semester] Error fetching semesters:', err);

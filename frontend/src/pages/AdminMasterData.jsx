@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import Modal from '../components/Modal';
 import { 
@@ -12,12 +13,26 @@ import {
   Pencil, 
   Trash2, 
   Loader2, 
-  AlertTriangle 
+  AlertTriangle,
+  Filter
 } from 'lucide-react';
 
 export default function AdminMasterData() {
+  const { user, activeDepartment } = useAuth();
   const { addToast } = useToast();
   const [activeSubTab, setActiveSubTab] = useState('subjects'); // 'departments' | 'faculty' | 'semesters' | 'subjects' | 'timeslots'
+
+  // Department Filter state (defaults to logged-in user's active department, or 'all')
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState(() => {
+    return activeDepartment?.id ? String(activeDepartment.id) : 'all';
+  });
+
+  // Sync filter when activeDepartment in context changes
+  useEffect(() => {
+    if (activeDepartment?.id) {
+      setSelectedDeptFilter(String(activeDepartment.id));
+    }
+  }, [activeDepartment]);
 
   // Data states
   const [departments, setDepartments] = useState([]);
@@ -64,20 +79,33 @@ export default function AdminMasterData() {
     fetchAllData();
   }, []);
 
+  // Filtered lists based on selected department filter
+  const targetDeptId = selectedDeptFilter !== 'all' ? selectedDeptFilter : null;
+  const filteredFaculty = targetDeptId 
+    ? faculty.filter(f => String(f.department_id) === String(targetDeptId)) 
+    : faculty;
+  const filteredSemesters = targetDeptId 
+    ? semesters.filter(s => String(s.department_id) === String(targetDeptId)) 
+    : semesters;
+  const filteredSubjects = targetDeptId 
+    ? subjects.filter(sub => String(sub.department_id) === String(targetDeptId) || filteredSemesters.some(s => s.id === sub.semester_id)) 
+    : subjects;
+
   // Open Create/Edit modal
   const handleOpenAddModal = () => {
     setEditingItem(null);
-    if (activeSubTab === 'departments') setFormData({ name: '' });
-    if (activeSubTab === 'faculty') setFormData({ faculty_code: '', name: '', password: '', role: 'faculty', department_id: departments[0]?.id || '' });
-    if (activeSubTab === 'semesters') setFormData({ number: 3, department_id: departments[0]?.id || '', class_room: '', academic_year: '2025-2026' });
-    if (activeSubTab === 'subjects') setFormData({ subject_code: '', name: '', semester_id: semesters[0]?.id || '', faculty_id: faculty[0]?.id || '', weekly_hours: 4, is_lab: false, is_parallel_activity: false, is_generic_activity: false });
+    const defaultDeptId = targetDeptId || activeDepartment?.id || departments[0]?.id || '';
+    if (activeSubTab === 'departments') setFormData({ name: '', code: '' });
+    if (activeSubTab === 'faculty') setFormData({ faculty_code: '', name: '', password: '', role: 'faculty', department_id: defaultDeptId });
+    if (activeSubTab === 'semesters') setFormData({ number: 3, department_id: defaultDeptId, class_room: '', academic_year: '2025-2026' });
+    if (activeSubTab === 'subjects') setFormData({ subject_code: '', name: '', semester_id: filteredSemesters[0]?.id || semesters[0]?.id || '', faculty_id: filteredFaculty[0]?.id || faculty[0]?.id || '', weekly_hours: 4, is_lab: false, is_parallel_activity: false, is_generic_activity: false });
     if (activeSubTab === 'timeslots') setFormData({ day: 'Monday', period_number: 1, start_time: '09:00:00', end_time: '09:55:00' });
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (item) => {
     setEditingItem(item);
-    if (activeSubTab === 'departments') setFormData({ name: item.name });
+    if (activeSubTab === 'departments') setFormData({ name: item.name, code: item.code || '' });
     if (activeSubTab === 'faculty') setFormData({ faculty_code: item.faculty_code, name: item.name, password: '', role: item.role, department_id: item.department_id });
     if (activeSubTab === 'semesters') setFormData({ number: item.number, department_id: item.department_id, class_room: item.class_room, academic_year: item.academic_year });
     if (activeSubTab === 'subjects') setFormData({ subject_code: item.subject_code, name: item.name, semester_id: item.semester_id, faculty_id: item.faculty_id, weekly_hours: item.weekly_hours, is_lab: item.is_lab, is_parallel_activity: Boolean(item.is_parallel_activity), is_generic_activity: Boolean(item.is_generic_activity) });
@@ -138,6 +166,35 @@ export default function AdminMasterData() {
 
   return (
     <div className="space-y-6">
+      {/* Department Filter Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 sm:px-4 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-2">
+          <Filter className="w-4 h-4 text-slate-500" />
+          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Department Scope:</span>
+          <select
+            value={selectedDeptFilter}
+            onChange={(e) => setSelectedDeptFilter(e.target.value)}
+            className="text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="all">All Departments ({departments.length})</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} {d.code ? `(${d.code})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedDeptFilter !== 'all' && (
+          <div className="text-xs text-slate-500 flex items-center gap-1.5">
+            <span>Showing records for:</span>
+            <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+              {departments.find(d => String(d.id) === String(selectedDeptFilter))?.name}
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Sub-Navigation Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -148,7 +205,7 @@ export default function AdminMasterData() {
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            Subjects ({subjects.length})
+            Subjects ({filteredSubjects.length})
           </button>
           <button
             onClick={() => setActiveSubTab('faculty')}
@@ -157,7 +214,7 @@ export default function AdminMasterData() {
             }`}
           >
             <Users className="w-4 h-4" />
-            Faculty ({faculty.length})
+            Faculty ({filteredFaculty.length})
           </button>
           <button
             onClick={() => setActiveSubTab('semesters')}
@@ -166,7 +223,7 @@ export default function AdminMasterData() {
             }`}
           >
             <GraduationCap className="w-4 h-4" />
-            Semesters ({semesters.length})
+            Semesters ({filteredSemesters.length})
           </button>
           <button
             onClick={() => setActiveSubTab('timeslots')}
@@ -214,6 +271,7 @@ export default function AdminMasterData() {
                     <th className="py-3 px-4">Code</th>
                     <th className="py-3 px-4">Subject Name</th>
                     <th className="py-3 px-4">Semester</th>
+                    <th className="py-3 px-4">Department</th>
                     <th className="py-3 px-4">Faculty Assigned</th>
                     <th className="py-3 px-4">Weekly Hours</th>
                     <th className="py-3 px-4">Type</th>
@@ -221,7 +279,7 @@ export default function AdminMasterData() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {subjects.map((sub) => (
+                  {filteredSubjects.map((sub) => (
                     <tr key={sub.id} className="hover:bg-slate-50/75 transition-colors">
                       <td className="py-3 px-4 font-mono font-medium text-slate-900">{sub.subject_code}</td>
                       <td className="py-3 px-4 font-medium text-slate-800">{sub.name}</td>
@@ -229,6 +287,18 @@ export default function AdminMasterData() {
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700">
                           Semester {sub.semester_number || sub.semester_id}
                         </span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {sub.department_name ? (
+                          <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                            {sub.department_name}
+                            {sub.department_code && (
+                              <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">
+                                {sub.department_code}
+                              </span>
+                            )}
+                          </span>
+                        ) : '—'}
                       </td>
                       <td className="py-3 px-4 text-slate-600">
                         {sub.faculty_name} <span className="text-xs text-slate-600">({sub.faculty_code})</span>
@@ -278,7 +348,7 @@ export default function AdminMasterData() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {faculty.map((f) => (
+                  {filteredFaculty.map((f) => (
                     <tr key={f.id} className="hover:bg-slate-50/75 transition-colors">
                       <td className="py-3 px-4 font-mono font-medium text-slate-900">{f.faculty_code}</td>
                       <td className="py-3 px-4 font-medium text-slate-800">{f.name}</td>
@@ -289,7 +359,14 @@ export default function AdminMasterData() {
                           {f.role}
                         </span>
                       </td>
-                      <td className="py-3 px-4 text-slate-600">{f.department_name || `Dept #${f.department_id}`}</td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {f.department_name || `Dept #${f.department_id}`}
+                        {f.department_code && (
+                          <span className="ml-1.5 font-mono text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">
+                            {f.department_code}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -327,12 +404,19 @@ export default function AdminMasterData() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {semesters.map((s) => (
+                  {filteredSemesters.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50/75 transition-colors">
                       <td className="py-3 px-4 font-bold text-slate-900">Semester {s.number} (S{s.number})</td>
                       <td className="py-3 px-4 font-mono font-medium text-emerald-700">{s.class_room}</td>
                       <td className="py-3 px-4 text-slate-600">{s.academic_year}</td>
-                      <td className="py-3 px-4 text-slate-600">{s.department_name || `Dept #${s.department_id}`}</td>
+                      <td className="py-3 px-4 text-slate-600">
+                        {s.department_name || `Dept #${s.department_id}`}
+                        {s.department_code && (
+                          <span className="ml-1.5 font-mono text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded">
+                            {s.department_code}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -411,6 +495,7 @@ export default function AdminMasterData() {
                   <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                     <th className="py-3 px-4">ID</th>
                     <th className="py-3 px-4">Department Name</th>
+                    <th className="py-3 px-4">Code</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -419,6 +504,9 @@ export default function AdminMasterData() {
                     <tr key={d.id} className="hover:bg-slate-50/75 transition-colors">
                       <td className="py-3 px-4 font-mono text-slate-500">#{d.id}</td>
                       <td className="py-3 px-4 font-medium text-slate-900">{d.name}</td>
+                      <td className="py-3 px-4 font-mono font-semibold text-emerald-700">
+                        {d.code || '—'}
+                      </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -453,16 +541,29 @@ export default function AdminMasterData() {
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Departments Form */}
           {activeSubTab === 'departments' && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department Name</label>
-              <input
-                type="text"
-                required
-                value={formData.name || ''}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g. Computer Science & Engineering"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-              />
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department Name</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name || ''}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="e.g. Mechanical Engineering"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department Code</label>
+                <input
+                  type="text"
+                  required
+                  value={formData.code || ''}
+                  onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                  placeholder="e.g. MECH"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none uppercase font-mono"
+                />
+              </div>
             </div>
           )}
 
@@ -524,7 +625,9 @@ export default function AdminMasterData() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   >
                     {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.code ? `(${d.code})` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -580,7 +683,9 @@ export default function AdminMasterData() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   >
                     {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                      <option key={d.id} value={d.id}>
+                        {d.name} {d.code ? `(${d.code})` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -623,8 +728,10 @@ export default function AdminMasterData() {
                     onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   >
-                    {semesters.map((s) => (
-                      <option key={s.id} value={s.id}>Semester {s.number} ({s.class_room})</option>
+                    {filteredSemesters.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        Semester {s.number} ({s.class_room}){s.department_name ? ` • ${s.department_name}` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -636,7 +743,9 @@ export default function AdminMasterData() {
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   >
                     {faculty.map((f) => (
-                      <option key={f.id} value={f.id}>{f.name} ({f.faculty_code})</option>
+                      <option key={f.id} value={f.id}>
+                        {f.name} ({f.faculty_code}){f.department_name ? ` • ${f.department_name}` : ''}
+                      </option>
                     ))}
                   </select>
                 </div>

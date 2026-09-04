@@ -58,7 +58,7 @@ async function getSlotOccupantIds(semesterId, timeslotId, academicYear, excludeE
 // 1. Get Timetable (with rich joined details)
 async function getTimetable(req, res) {
   try {
-    const { semester_id, academic_year, faculty_id } = req.query;
+    const { semester_id, academic_year, faculty_id, department_id } = req.query;
 
     let query = `
       SELECT 
@@ -79,6 +79,9 @@ async function getTimetable(req, res) {
         f.faculty_code,
         sem.number as semester_number,
         sem.class_room,
+        sem.department_id,
+        d.name as department_name,
+        d.code as department_code,
         ts.day,
         ts.period_number,
         ts.start_time,
@@ -87,6 +90,7 @@ async function getTimetable(req, res) {
       JOIN subject sub ON te.subject_id = sub.id
       JOIN faculty f ON sub.faculty_id = f.id
       JOIN semester sem ON te.semester_id = sem.id
+      LEFT JOIN department d ON sem.department_id = d.id
       JOIN timeslot ts ON te.timeslot_id = ts.id
       WHERE 1=1
     `;
@@ -95,6 +99,11 @@ async function getTimetable(req, res) {
     if (semester_id) {
       params.push(semester_id);
       query += ` AND te.semester_id = $${params.length}`;
+    }
+
+    if (department_id) {
+      params.push(department_id);
+      query += ` AND sem.department_id = $${params.length}`;
     }
 
     if (academic_year) {

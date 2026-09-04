@@ -23,39 +23,30 @@ async function getDepartmentById(req, res) {
 
 async function createDepartment(req, res) {
   try {
-    const { name } = req.body;
+    const { name, code } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Department name is required' });
 
     const trimmedName = name.trim();
+    // Derive default code if not supplied: e.g. "Mechanical Engineering" -> "ME"
+    const derivedCode = (code && code.trim())
+      ? code.trim().toUpperCase()
+      : trimmedName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 10);
 
-    // Step 1: Pre-validate uniqueness with query logging
-    console.log(`\n🔍 [Department Validation] Checking uniqueness for department name: "${trimmedName}"`);
-    const checkSql = 'SELECT id, name FROM department WHERE LOWER(name) = LOWER($1)';
-    console.log(`   SQL: ${checkSql} | Params: [ "${trimmedName}" ]`);
-    
-    const existing = await db.query(checkSql, [trimmedName]);
+    // Step 1: Pre-validate uniqueness
+    const checkSql = 'SELECT id, name, code FROM department WHERE LOWER(name) = LOWER($1) OR (code IS NOT NULL AND LOWER(code) = LOWER($2))';
+    const existing = await db.query(checkSql, [trimmedName, derivedCode]);
     if (existing.rows.length > 0) {
-      console.warn(`⚠️ [Department Validation] Duplicate found: ID=${existing.rows[0].id}, Name="${existing.rows[0].name}"`);
       return res.status(400).json({ 
-        error: `Department "${existing.rows[0].name}" already exists.`,
+        error: `Department "${existing.rows[0].name}" or code [${existing.rows[0].code}] already exists.`,
         field: 'name'
       });
     }
-    console.log(`✅ [Department Validation] Department name "${trimmedName}" is available.`);
 
-    const insertSql = 'INSERT INTO department (name) VALUES ($1) RETURNING *';
-    console.log(`📝 [Department Insert] Executing insert for "${trimmedName}"`);
-
-    const result = await db.query(insertSql, [trimmedName]);
-    console.log(`🎉 [Department Insert] Successfully created department ID=${result.rows[0].id}`);
+    const insertSql = 'INSERT INTO department (name, code) VALUES ($1, $2) RETURNING *';
+    const result = await db.query(insertSql, [trimmedName, derivedCode]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('❌ [Department Insert Error]:', {
-      message: err.message,
-      code: err.code,
-      detail: err.detail,
-      constraint: err.constraint
-    });
+    console.error('❌ [Department Insert Error]:', err);
 
     if (err.code === '23505') {
       // If sequence was out of sync (pkey collision), compute next available ID and insert
@@ -63,14 +54,13 @@ async function createDepartment(req, res) {
         try {
           const maxRes = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM department');
           const nextId = maxRes.rows[0].next_id;
-          const fallbackRes = await db.query('INSERT INTO department (id, name) VALUES ($1, $2) RETURNING *', [nextId, trimmedName]);
-          console.log(`🎉 [Department Insert] Recovered with ID=${fallbackRes.rows[0].id}`);
+          const fallbackRes = await db.query('INSERT INTO department (id, name, code) VALUES ($1, $2, $3) RETURNING *', [nextId, trimmedName, derivedCode]);
           return res.status(201).json(fallbackRes.rows[0]);
         } catch (retryErr) {
           return res.status(500).json({ error: retryErr.message });
         }
       }
-      return res.status(400).json({ error: `Department "${trimmedName}" already exists.` });
+      return res.status(400).json({ error: `Department "${trimmedName}" or code already exists.` });
     }
     res.status(500).json({ error: err.message });
   }
@@ -78,29 +68,30 @@ async function createDepartment(req, res) {
 
 async function updateDepartment(req, res) {
   try {
-    const { name } = req.body;
+    const { name, code } = req.body;
     const { id } = req.params;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Department name is required' });
 
     const trimmedName = name.trim();
+    const derivedCode = (code && code.trim())
+      ? code.trim().toUpperCase()
+      : trimmedName.split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 10);
 
     // Check duplicate on other records
-    console.log(`\n🔍 [Department Update Validation] Checking name "${trimmedName}" for ID != ${id}`);
-    const checkSql = 'SELECT id, name FROM department WHERE LOWER(name) = LOWER($1) AND id != $2';
-    const existing = await db.query(checkSql, [trimmedName, id]);
+    const checkSql = 'SELECT id, name, code FROM department WHERE (LOWER(name) = LOWER($1) OR (code IS NOT NULL AND LOWER(code) = LOWER($2))) AND id != $3';
+    const existing = await db.query(checkSql, [trimmedName, derivedCode, id]);
     if (existing.rows.length > 0) {
-      console.warn(`⚠️ [Department Update] Name "${trimmedName}" already used by ID=${existing.rows[0].id}`);
-      return res.status(400).json({ error: `Department name "${existing.rows[0].name}" already in use.` });
+      return res.status(400).json({ error: `Department name "${existing.rows[0].name}" or code [${existing.rows[0].code}] already in use.` });
     }
 
-    const updateSql = 'UPDATE department SET name = $1 WHERE id = $2 RETURNING *';
-    const result = await db.query(updateSql, [trimmedName, id]);
+    const updateSql = 'UPDATE department SET name = $1, code = $2 WHERE id = $3 RETURNING *';
+    const result = await db.query(updateSql, [trimmedName, derivedCode, id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Department not found' });
     res.json(result.rows[0]);
   } catch (err) {
     console.error('❌ [Department Update Error]:', err);
     if (err.code === '23505') {
-      return res.status(400).json({ error: 'Department name already exists.' });
+      return res.status(400).json({ error: 'Department name or code already exists.' });
     }
     res.status(500).json({ error: err.message });
   }

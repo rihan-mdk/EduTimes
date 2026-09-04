@@ -48,29 +48,43 @@ export async function apiRequest(endpoint, options = {}) {
 
 export const api = {
   // Auth
-  login: (faculty_code, password) => apiRequest('/auth/login', { method: 'POST', body: { faculty_code, password } }),
+  login: (faculty_code, password, department_id = null, department_code = null) => 
+    apiRequest('/auth/login', { method: 'POST', body: { faculty_code, password, department_id, department_code } }),
   getMe: () => apiRequest('/auth/me'),
 
   // Departments
-  getDepartments: () => apiRequest('/departments'),
+  getPublicDepartments: () => apiRequest('/departments/public').catch(() => apiRequest('/departments')),
+  getDepartments: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/departments${qs ? `?${qs}` : ''}`);
+  },
   createDepartment: (data) => apiRequest('/departments', { method: 'POST', body: data }),
   updateDepartment: (id, data) => apiRequest(`/departments/${id}`, { method: 'PUT', body: data }),
   deleteDepartment: (id) => apiRequest(`/departments/${id}`, { method: 'DELETE' }),
 
   // Faculty
-  getFaculty: () => apiRequest('/faculty'),
+  getFaculty: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/faculty${qs ? `?${qs}` : ''}`);
+  },
   createFaculty: (data) => apiRequest('/faculty', { method: 'POST', body: data }),
   updateFaculty: (id, data) => apiRequest(`/faculty/${id}`, { method: 'PUT', body: data }),
   deleteFaculty: (id) => apiRequest(`/faculty/${id}`, { method: 'DELETE' }),
 
   // Semesters
-  getSemesters: () => apiRequest('/semesters'),
+  getSemesters: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/semesters${qs ? `?${qs}` : ''}`);
+  },
   createSemester: (data) => apiRequest('/semesters', { method: 'POST', body: data }),
   updateSemester: (id, data) => apiRequest(`/semesters/${id}`, { method: 'PUT', body: data }),
   deleteSemester: (id) => apiRequest(`/semesters/${id}`, { method: 'DELETE' }),
 
   // Subjects
-  getSubjects: () => apiRequest('/subjects'),
+  getSubjects: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/subjects${qs ? `?${qs}` : ''}`);
+  },
   createSubject: (data) => apiRequest('/subjects', { method: 'POST', body: data }),
   updateSubject: (id, data) => apiRequest(`/subjects/${id}`, { method: 'PUT', body: data }),
   deleteSubject: (id) => apiRequest(`/subjects/${id}`, { method: 'DELETE' }),

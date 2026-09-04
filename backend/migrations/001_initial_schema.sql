@@ -5,7 +5,8 @@
 -- 1. Departments Table
 CREATE TABLE IF NOT EXISTS department (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
+    name VARCHAR(255) NOT NULL,
+    code VARCHAR(50)
 );
 
 -- 2. Faculty Table

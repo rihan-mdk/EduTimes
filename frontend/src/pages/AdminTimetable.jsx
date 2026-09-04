@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/Toast';
 import Modal from '../components/Modal';
 import jsPDF from 'jspdf';
@@ -14,7 +15,8 @@ import {
   X, 
   Clock, 
   Coffee, 
-  Utensils 
+  Utensils,
+  Building2
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -32,6 +34,7 @@ const PERIOD_TIMES = {
 };
 
 export default function AdminTimetable() {
+  const { activeDepartment } = useAuth();
   const { addToast } = useToast();
   const gridRef = useRef(null);
 
@@ -71,7 +74,14 @@ export default function AdminTimetable() {
         setSubjects(subRes);
         setTimeslots(tsRes);
 
-        if (semRes.length > 0) {
+        const activeSemList = activeDepartment?.id 
+          ? semRes.filter(s => String(s.department_id) === String(activeDepartment.id))
+          : semRes;
+
+        if (activeSemList.length > 0) {
+          setSelectedSemesterId(activeSemList[0].id);
+          setAcademicYear(activeSemList[0].academic_year || '2026-27');
+        } else if (semRes.length > 0) {
           setSelectedSemesterId(semRes[0].id);
           setAcademicYear(semRes[0].academic_year || '2026-27');
         }
@@ -83,6 +93,22 @@ export default function AdminTimetable() {
     }
     init();
   }, []);
+
+  // Filter semesters by active department if set
+  const filteredSemesters = activeDepartment?.id 
+    ? semesters.filter(s => String(s.department_id) === String(activeDepartment.id))
+    : semesters;
+
+  // Sync selectedSemesterId if department changes
+  useEffect(() => {
+    if (filteredSemesters.length > 0) {
+      const exists = filteredSemesters.some(s => String(s.id) === String(selectedSemesterId));
+      if (!exists) {
+        setSelectedSemesterId(filteredSemesters[0].id);
+        setAcademicYear(filteredSemesters[0].academic_year || '2026-27');
+      }
+    }
+  }, [activeDepartment, semesters]);
 
   // Fetch timetable entries whenever selected semester or academic year changes
   const fetchTimetable = async () => {
@@ -357,7 +383,7 @@ export default function AdminTimetable() {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
       pdf.addImage(imgData, 'PNG', 0, 10, pdfWidth, pdfHeight);
-      pdf.save(`Timetable_Semester_${currentSemester?.number || 'View'}_${academicYear}.pdf`);
+      pdf.save(`Timetable_${activeDepartment?.code || 'Dept'}_Sem_${currentSemester?.number || 'View'}_${academicYear}.pdf`);
       addToast('Timetable PDF exported successfully!', 'success');
     } catch (err) {
       addToast('Failed to export PDF: ' + err.message, 'error');
@@ -373,27 +399,31 @@ export default function AdminTimetable() {
         {/* Semester Tabs */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
           <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Semester:</span>
-          {semesters.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => {
-                setSelectedSemesterId(s.id);
-                setAcademicYear(s.academic_year || '2025-2026');
-              }}
-              className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                String(selectedSemesterId) === String(s.id)
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              <span>Semester {s.number} (S{s.number})</span>
-              <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
-                String(selectedSemesterId) === String(s.id) ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-600'
-              }`}>
-                {s.class_room}
-              </span>
-            </button>
-          ))}
+          {filteredSemesters.length === 0 ? (
+            <span className="text-xs text-slate-400 italic px-2">No semesters configured for this department</span>
+          ) : (
+            filteredSemesters.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => {
+                  setSelectedSemesterId(s.id);
+                  setAcademicYear(s.academic_year || '2025-2026');
+                }}
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
+                  String(selectedSemesterId) === String(s.id)
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <span>Semester {s.number} (S{s.number})</span>
+                <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                  String(selectedSemesterId) === String(s.id) ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  {s.class_room}
+                </span>
+              </button>
+            ))
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -442,9 +472,16 @@ export default function AdminTimetable() {
         {/* Printable / View Header */}
         <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">
-              Semester {currentSemester?.number || ''} Weekly Schedule
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-bold text-slate-900">
+                {activeDepartment ? `${activeDepartment.name} — ` : ''}Semester {currentSemester?.number || ''} Weekly Schedule
+              </h2>
+              {activeDepartment?.code && (
+                <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                  {activeDepartment.code}
+                </span>
+              )}
+            </div>
             <div className="text-xs text-slate-500 mt-1 flex items-center gap-3">
               <span>Room: <strong className="text-slate-800 font-mono">{currentSemester?.class_room}</strong></span>
               <span>•</span>
