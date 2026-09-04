@@ -7,8 +7,8 @@ DELETE FROM faculty;
 DELETE FROM department;
 
 -- 1. Insert Department
-INSERT INTO department (id, name) 
-VALUES (1, 'Artificial Intelligence and Machine Learning');
+INSERT INTO department (name) 
+VALUES ('Artificial Intelligence and Machine Learning');
 
 -- 2. Insert Initial Faculty (F01 to F15)
 -- Default password: 'Welcome@123' -> Hash: $2a$10$PVPFar9SHF2bkYcwrNYBpuD/LBUt4keQzhrgRQai1//TnlrXmj5gu

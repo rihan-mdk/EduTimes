@@ -58,7 +58,19 @@ async function createDepartment(req, res) {
     });
 
     if (err.code === '23505') {
-      return res.status(400).json({ error: `Department already exists.` });
+      // If sequence was out of sync (pkey collision), compute next available ID and insert
+      if (err.detail && (err.detail.includes('pkey') || err.detail.includes('(id)='))) {
+        try {
+          const maxRes = await db.query('SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM department');
+          const nextId = maxRes.rows[0].next_id;
+          const fallbackRes = await db.query('INSERT INTO department (id, name) VALUES ($1, $2) RETURNING *', [nextId, trimmedName]);
+          console.log(`🎉 [Department Insert] Recovered with ID=${fallbackRes.rows[0].id}`);
+          return res.status(201).json(fallbackRes.rows[0]);
+        } catch (retryErr) {
+          return res.status(500).json({ error: retryErr.message });
+        }
+      }
+      return res.status(400).json({ error: `Department "${trimmedName}" already exists.` });
     }
     res.status(500).json({ error: err.message });
   }
