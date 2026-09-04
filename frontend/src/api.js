@@ -50,6 +50,10 @@ export const api = {
   // Auth
   login: (faculty_code, password, department_id = null, department_code = null) => 
     apiRequest('/auth/login', { method: 'POST', body: { faculty_code, password, department_id, department_code } }),
+  checkDepartment: (department_code) =>
+    apiRequest('/auth/check-department', { method: 'POST', body: { department_code } }),
+  setupDepartment: (data) =>
+    apiRequest('/auth/setup-department', { method: 'POST', body: data }),
   getMe: () => apiRequest('/auth/me'),
 
   // Departments
@@ -68,6 +72,20 @@ export const api = {
     return apiRequest(`/faculty${qs ? `?${qs}` : ''}`);
   },
   createFaculty: (data) => apiRequest('/faculty', { method: 'POST', body: data }),
+  // createFacultyRaw: returns { status, data } without throwing, so callers can handle 409 conflicts
+  createFacultyRaw: async (data) => {
+    const token = localStorage.getItem('yensync_token');
+    const response = await fetch('/api/faculty', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+    });
+    const json = await response.json().catch(() => ({}));
+    return { status: response.status, data: json };
+  },
   updateFaculty: (id, data) => apiRequest(`/faculty/${id}`, { method: 'PUT', body: data }),
   deleteFaculty: (id) => apiRequest(`/faculty/${id}`, { method: 'DELETE' }),
 
@@ -104,8 +122,8 @@ export const api = {
   createTimetableEntry: (data) => apiRequest('/timetable', { method: 'POST', body: data }),
   updateTimetableEntry: (id, data) => apiRequest(`/timetable/${id}`, { method: 'PUT', body: data }),
   deleteTimetableEntry: (id) => apiRequest(`/timetable/${id}`, { method: 'DELETE' }),
-  autoGenerateTimetable: (academic_year, overwrite = true) => 
-    apiRequest('/timetable/auto-generate', { method: 'POST', body: { academic_year, overwrite } }),
+  autoGenerateTimetable: (academic_year, overwrite = true, department_id = null) => 
+    apiRequest('/timetable/auto-generate', { method: 'POST', body: { academic_year, overwrite, department_id } }),
   clearTimetable: (data) => apiRequest('/timetable/clear', { method: 'POST', body: data }),
 
   // Calendar

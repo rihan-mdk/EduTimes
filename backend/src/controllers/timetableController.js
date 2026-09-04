@@ -310,48 +310,74 @@ async function deleteTimetableEntry(req, res) {
   }
 }
 
-// 6. Auto-generate Timetable for ALL Semesters (Backtracking Algorithm)
+// 6. Auto-generate Timetable for Semesters (Backtracking Algorithm)
 async function autoGenerateTimetable(req, res) {
   const client = await db.pool.connect();
   try {
-    const { academic_year, overwrite = true } = req.body;
+    const { academic_year, overwrite = true, department_id } = req.body;
     if (!academic_year) {
       return res.status(400).json({ error: 'academic_year is required (e.g. "2025-2026").' });
     }
 
-    // Fetch all semesters, subjects, timeslots
-    const [semestersRes, subjectsRes, timeslotsRes] = await Promise.all([
-      client.query('SELECT * FROM semester WHERE academic_year = $1 ORDER BY number ASC', [academic_year]),
-      client.query(`
-        SELECT sub.*, sem.academic_year
-        FROM subject sub
-        JOIN semester sem ON sub.semester_id = sem.id
-        WHERE sem.academic_year = $1
-      `, [academic_year]),
-      client.query('SELECT * FROM timeslot ORDER BY id ASC')
+    let semQuery = 'SELECT * FROM semester WHERE academic_year = $1';
+    let subQuery = `
+      SELECT sub.*, sem.academic_year
+      FROM subject sub
+      JOIN semester sem ON sub.semester_id = sem.id
+      WHERE sem.academic_year = $1
+    `;
+    const semParams = [academic_year];
+    const subParams = [academic_year];
+
+    if (department_id) {
+      semParams.push(department_id);
+      semQuery += ` AND department_id = $${semParams.length}`;
+
+      subParams.push(department_id);
+      subQuery += ` AND sem.department_id = $${subParams.length}`;
+    }
+
+    semQuery += ' ORDER BY number ASC';
+
+    // Fetch semesters, subjects, timeslots, and existing entries of other departments
+    const [semestersRes, subjectsRes, timeslotsRes, existingOtherEntriesRes] = await Promise.all([
+      client.query(semQuery, semParams),
+      client.query(subQuery, subParams),
+      client.query('SELECT * FROM timeslot ORDER BY id ASC'),
+      department_id 
+        ? client.query(`
+            SELECT te.*, sub.faculty_id
+            FROM timetable_entry te
+            JOIN semester sem ON te.semester_id = sem.id
+            LEFT JOIN subject sub ON te.subject_id = sub.id
+            WHERE te.academic_year = $1 AND sem.department_id != $2
+          `, [academic_year, department_id])
+        : Promise.resolve({ rows: [] })
     ]);
 
     const semesters = semestersRes.rows;
     const subjects = subjectsRes.rows;
     const timeslots = timeslotsRes.rows;
+    const otherDeptEntries = existingOtherEntriesRes.rows || [];
 
     if (semesters.length === 0) {
-      return res.status(400).json({ error: `No semesters found for academic year ${academic_year}.` });
+      return res.status(400).json({ error: `No semesters found for academic year ${academic_year}${department_id ? ' in this department' : ''}.` });
     }
     if (subjects.length === 0) {
-      return res.status(400).json({ error: `No subjects configured for academic year ${academic_year}.` });
+      return res.status(400).json({ error: `No subjects configured for academic year ${academic_year}${department_id ? ' in this department' : ''}.` });
     }
     if (timeslots.length === 0) {
       return res.status(400).json({ error: 'No timeslots configured in the system.' });
     }
 
-    // Run deterministic backtracking solver across ALL semesters simultaneously
+    // Run deterministic backtracking solver across the department's semesters,
+    // respecting existing entries of other departments so shared faculty are not double-booked
     const solution = generateTimetable({
       semesters,
       subjects,
       timeslots,
       academicYear: academic_year,
-      existingEntries: []
+      existingEntries: otherDeptEntries
     });
 
     if (!solution.success) {
@@ -365,7 +391,16 @@ async function autoGenerateTimetable(req, res) {
     await client.query('BEGIN');
 
     if (overwrite) {
-      await client.query('DELETE FROM timetable_entry WHERE academic_year = $1', [academic_year]);
+      if (department_id) {
+        await client.query(`
+          DELETE FROM timetable_entry
+          WHERE academic_year = $1 AND semester_id IN (
+            SELECT id FROM semester WHERE department_id = $2
+          )
+        `, [academic_year, department_id]);
+      } else {
+        await client.query('DELETE FROM timetable_entry WHERE academic_year = $1', [academic_year]);
+      }
     }
 
     const insertedEntries = [];

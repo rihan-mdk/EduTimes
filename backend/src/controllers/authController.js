@@ -5,6 +5,120 @@ const db = require('../config/db');
 const JWT_SECRET = process.env.JWT_SECRET || 'yensync_super_secret_jwt_key_2026_department';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
+// ---------------------------------------------------------------
+// POST /api/auth/check-department
+// Public — checks if a department code exists
+// Returns: { exists: true, id, name, code } | { exists: false }
+// ---------------------------------------------------------------
+async function checkDepartment(req, res) {
+  try {
+    const { department_code } = req.body;
+    if (!department_code || !department_code.trim()) {
+      return res.status(400).json({ error: 'Department code is required.' });
+    }
+
+    const result = await db.query(
+      `SELECT id, name, code FROM department WHERE LOWER(code) = LOWER($1)`,
+      [department_code.trim()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({ exists: false });
+    }
+
+    const dept = result.rows[0];
+    return res.json({ exists: true, id: dept.id, name: dept.name, code: dept.code });
+  } catch (err) {
+    console.error('[Auth] checkDepartment error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ---------------------------------------------------------------
+// POST /api/auth/setup-department
+// Public — creates a new department + first admin account, returns JWT
+// Body: { department_name, department_code, faculty_code, admin_name, password }
+// ---------------------------------------------------------------
+async function setupDepartment(req, res) {
+  try {
+    const { department_name, department_code, faculty_code, admin_name, password } = req.body;
+
+    if (!department_name || !department_code || !faculty_code || !admin_name || !password) {
+      return res.status(400).json({
+        error: 'All fields are required: department_name, department_code, faculty_code, admin_name, password.'
+      });
+    }
+
+    const trimmedCode = department_code.trim().toUpperCase();
+    const trimmedFacultyCode = faculty_code.trim();
+
+    // Check dept code not already taken
+    const deptCheck = await db.query(
+      `SELECT id FROM department WHERE LOWER(code) = LOWER($1)`,
+      [trimmedCode]
+    );
+    if (deptCheck.rows.length > 0) {
+      return res.status(400).json({ error: `Department code "${trimmedCode}" already exists.` });
+    }
+
+    // Check faculty_code not already taken globally
+    const facCheck = await db.query(
+      `SELECT id FROM faculty WHERE faculty_code = $1`,
+      [trimmedFacultyCode]
+    );
+    if (facCheck.rows.length > 0) {
+      return res.status(400).json({ error: `Faculty code "${trimmedFacultyCode}" is already in use.` });
+    }
+
+    // 1. Create the department
+    const deptResult = await db.query(
+      `INSERT INTO department (name, code) VALUES ($1, $2) RETURNING id, name, code`,
+      [department_name.trim(), trimmedCode]
+    );
+    const newDept = deptResult.rows[0];
+
+    // 2. Create the first admin account
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const facResult = await db.query(
+      `INSERT INTO faculty (faculty_code, name, password_hash, role, department_id)
+       VALUES ($1, $2, $3, 'admin', $4)
+       RETURNING id, faculty_code, name, role, department_id`,
+      [trimmedFacultyCode, admin_name.trim(), password_hash, newDept.id]
+    );
+    const newAdmin = facResult.rows[0];
+
+    // 3. Sign JWT and return
+    const payload = {
+      id: newAdmin.id,
+      faculty_code: newAdmin.faculty_code,
+      name: newAdmin.name,
+      role: newAdmin.role,
+      department_id: newDept.id,
+      department_name: newDept.name,
+      department_code: newDept.code,
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+    console.log(`🏛️ [Setup] New department "${newDept.name}" (${newDept.code}) created with admin "${newAdmin.name}" (${newAdmin.faculty_code})`);
+
+    return res.status(201).json({
+      message: `Department "${newDept.name}" created successfully!`,
+      token,
+      user: payload,
+    });
+  } catch (err) {
+    console.error('[Auth] setupDepartment error:', err);
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+// ---------------------------------------------------------------
+// POST /api/auth/login
+// Credentials: faculty_code + password + department_code (required)
+// ---------------------------------------------------------------
 async function login(req, res) {
   try {
     const { faculty_code, password, department_id, department_code } = req.body;
@@ -40,9 +154,10 @@ async function login(req, res) {
       });
     }
 
-    if (department_code && faculty.department_code && faculty.department_code.toLowerCase() !== department_code.toLowerCase().trim()) {
+    if (department_code && faculty.department_code &&
+        faculty.department_code.toLowerCase() !== department_code.toLowerCase().trim()) {
       return res.status(401).json({
-        error: `Account ${faculty.faculty_code} (${faculty.name}) belongs to "${faculty.department_name || 'another department'}", not department [${department_code}].`
+        error: `Account ${faculty.faculty_code} (${faculty.name}) belongs to "${faculty.department_name || 'another department'}", not department [${department_code.toUpperCase()}].`
       });
     }
 
@@ -53,7 +168,7 @@ async function login(req, res) {
       role: faculty.role,
       department_id: faculty.department_id,
       department_name: faculty.department_name,
-      department_code: faculty.department_code || 'AIML'
+      department_code: faculty.department_code || ''
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
@@ -89,6 +204,8 @@ async function getMe(req, res) {
 }
 
 module.exports = {
+  checkDepartment,
+  setupDepartment,
   login,
   getMe
 };

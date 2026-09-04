@@ -13,26 +13,13 @@ import {
   Pencil, 
   Trash2, 
   Loader2, 
-  AlertTriangle,
-  Filter
+  AlertTriangle
 } from 'lucide-react';
 
 export default function AdminMasterData() {
   const { user, activeDepartment } = useAuth();
   const { addToast } = useToast();
   const [activeSubTab, setActiveSubTab] = useState('subjects'); // 'departments' | 'faculty' | 'semesters' | 'subjects' | 'timeslots'
-
-  // Department Filter state (defaults to logged-in user's active department, or 'all')
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState(() => {
-    return activeDepartment?.id ? String(activeDepartment.id) : 'all';
-  });
-
-  // Sync filter when activeDepartment in context changes
-  useEffect(() => {
-    if (activeDepartment?.id) {
-      setSelectedDeptFilter(String(activeDepartment.id));
-    }
-  }, [activeDepartment]);
 
   // Data states
   const [departments, setDepartments] = useState([]);
@@ -48,19 +35,23 @@ export default function AdminMasterData() {
   const [formData, setFormData] = useState({});
   const [saving, setSaving] = useState(false);
 
+  // Cross-dept faculty conflict state: null | { id, name, department_name, department_code }
+  const [conflictFaculty, setConflictFaculty] = useState(null);
+
   // Delete Confirmation modal
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
-  // Load all master datasets
+  // Load all master datasets — scoped to active department
   const fetchAllData = async () => {
     setLoading(true);
     try {
+      const deptId = activeDepartment?.id;
       const [deptRes, facRes, semRes, subRes, tsRes] = await Promise.all([
         api.getDepartments(),
-        api.getFaculty(),
-        api.getSemesters(),
-        api.getSubjects(),
+        api.getFaculty(deptId ? { department_id: deptId } : {}),
+        api.getSemesters(deptId ? { department_id: deptId } : {}),
+        api.getSubjects(deptId ? { department_id: deptId } : {}),
         api.getTimeslots()
       ]);
       setDepartments(deptRes);
@@ -77,37 +68,44 @@ export default function AdminMasterData() {
 
   useEffect(() => {
     fetchAllData();
-  }, []);
+  }, [activeDepartment?.id]);
 
-  // Filtered lists based on selected department filter
-  const targetDeptId = selectedDeptFilter !== 'all' ? selectedDeptFilter : null;
-  const filteredFaculty = targetDeptId 
-    ? faculty.filter(f => String(f.department_id) === String(targetDeptId)) 
-    : faculty;
-  const filteredSemesters = targetDeptId 
-    ? semesters.filter(s => String(s.department_id) === String(targetDeptId)) 
-    : semesters;
-  const filteredSubjects = targetDeptId 
-    ? subjects.filter(sub => String(sub.department_id) === String(targetDeptId) || filteredSemesters.some(s => s.id === sub.semester_id)) 
-    : subjects;
+  // All lists are already scoped by the fetch — use directly
+  const targetDeptId = activeDepartment?.id ? String(activeDepartment.id) : null;
+  const filteredFaculty = faculty;
+  const filteredSemesters = semesters;
+  const filteredSubjects = subjects;
 
   // Open Create/Edit modal
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    setConflictFaculty(null);
     const defaultDeptId = targetDeptId || activeDepartment?.id || departments[0]?.id || '';
     if (activeSubTab === 'departments') setFormData({ name: '', code: '' });
     if (activeSubTab === 'faculty') setFormData({ faculty_code: '', name: '', password: '', role: 'faculty', department_id: defaultDeptId });
-    if (activeSubTab === 'semesters') setFormData({ number: 3, department_id: defaultDeptId, class_room: '', academic_year: '2025-2026' });
-    if (activeSubTab === 'subjects') setFormData({ subject_code: '', name: '', semester_id: filteredSemesters[0]?.id || semesters[0]?.id || '', faculty_id: filteredFaculty[0]?.id || faculty[0]?.id || '', weekly_hours: 4, is_lab: false, is_parallel_activity: false, is_generic_activity: false });
+    if (activeSubTab === 'semesters') setFormData({ number: 3, department_id: defaultDeptId, class_room: '', academic_year: '2025-2026', class_advisor: '', mentors: '' });
+    if (activeSubTab === 'subjects') {
+      setFormData({ 
+        subject_code: '', 
+        name: '', 
+        semester_id: filteredSemesters[0]?.id || '', 
+        faculty_id: filteredFaculty[0]?.id || '', 
+        weekly_hours: 4, 
+        is_lab: false, 
+        is_parallel_activity: false, 
+        is_generic_activity: false 
+      });
+    }
     if (activeSubTab === 'timeslots') setFormData({ day: 'Monday', period_number: 1, start_time: '09:00:00', end_time: '09:55:00' });
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (item) => {
     setEditingItem(item);
+    setConflictFaculty(null);
     if (activeSubTab === 'departments') setFormData({ name: item.name, code: item.code || '' });
     if (activeSubTab === 'faculty') setFormData({ faculty_code: item.faculty_code, name: item.name, password: '', role: item.role, department_id: item.department_id });
-    if (activeSubTab === 'semesters') setFormData({ number: item.number, department_id: item.department_id, class_room: item.class_room, academic_year: item.academic_year });
+    if (activeSubTab === 'semesters') setFormData({ number: item.number, department_id: item.department_id, class_room: item.class_room, academic_year: item.academic_year, class_advisor: item.class_advisor || '', mentors: item.mentors || '' });
     if (activeSubTab === 'subjects') setFormData({ subject_code: item.subject_code, name: item.name, semester_id: item.semester_id, faculty_id: item.faculty_id, weekly_hours: item.weekly_hours, is_lab: item.is_lab, is_parallel_activity: Boolean(item.is_parallel_activity), is_generic_activity: Boolean(item.is_generic_activity) });
     if (activeSubTab === 'timeslots') setFormData({ day: item.day, period_number: item.period_number, start_time: item.start_time, end_time: item.end_time });
     setIsModalOpen(true);
@@ -116,14 +114,39 @@ export default function AdminMasterData() {
   // Submit Add / Edit Form
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (activeSubTab === 'subjects') {
+      if (!formData.semester_id) {
+        addToast('Please select a valid semester for this subject. If none exist in this department, create a semester first.', 'error');
+        return;
+      }
+      if (!formData.faculty_id) {
+        addToast('Please select a faculty member for this subject.', 'error');
+        return;
+      }
+    }
     setSaving(true);
     try {
       if (activeSubTab === 'departments') {
         if (editingItem) await api.updateDepartment(editingItem.id, formData);
         else await api.createDepartment(formData);
       } else if (activeSubTab === 'faculty') {
-        if (editingItem) await api.updateFaculty(editingItem.id, formData);
-        else await api.createFaculty(formData);
+        if (editingItem) {
+          await api.updateFaculty(editingItem.id, formData);
+        } else {
+          // Use raw fetch so we can intercept 409 cross-dept conflict without throwing
+          const { status, data } = await api.createFacultyRaw(formData);
+          if (status === 409 && data.conflict) {
+            // Cross-department clash — show confirmation banner, keep modal open
+            setConflictFaculty(data.existing);
+            setSaving(false);
+            return;
+          }
+          if (status >= 400) {
+            // Hard error (same-dept duplicate, validation error, etc.)
+            throw new Error(data.error || `Error ${status}`);
+          }
+          // 201 Created — success
+        }
       } else if (activeSubTab === 'semesters') {
         if (editingItem) await api.updateSemester(editingItem.id, formData);
         else await api.createSemester(formData);
@@ -137,6 +160,7 @@ export default function AdminMasterData() {
 
       addToast(`${editingItem ? 'Updated' : 'Created'} successfully!`, 'success');
       setIsModalOpen(false);
+      setConflictFaculty(null);
       fetchAllData();
     } catch (err) {
       addToast(err.message || 'Operation failed', 'error');
@@ -166,35 +190,6 @@ export default function AdminMasterData() {
 
   return (
     <div className="space-y-6">
-      {/* Department Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 sm:px-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="flex items-center gap-2">
-          <Filter className="w-4 h-4 text-slate-500" />
-          <span className="text-xs font-semibold text-slate-600 uppercase tracking-wider">Department Scope:</span>
-          <select
-            value={selectedDeptFilter}
-            onChange={(e) => setSelectedDeptFilter(e.target.value)}
-            className="text-xs font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-lg px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="all">All Departments ({departments.length})</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} {d.code ? `(${d.code})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedDeptFilter !== 'all' && (
-          <div className="text-xs text-slate-500 flex items-center gap-1.5">
-            <span>Showing records for:</span>
-            <span className="font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
-              {departments.find(d => String(d.id) === String(selectedDeptFilter))?.name}
-            </span>
-          </div>
-        )}
-      </div>
-
       {/* Sub-Navigation Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
@@ -399,6 +394,7 @@ export default function AdminMasterData() {
                     <th className="py-3 px-4">Semester Number</th>
                     <th className="py-3 px-4">Classroom</th>
                     <th className="py-3 px-4">Academic Year</th>
+                    <th className="py-3 px-4">Advisor & Mentors</th>
                     <th className="py-3 px-4">Department</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
@@ -409,6 +405,16 @@ export default function AdminMasterData() {
                       <td className="py-3 px-4 font-bold text-slate-900">Semester {s.number} (S{s.number})</td>
                       <td className="py-3 px-4 font-mono font-medium text-emerald-700">{s.class_room}</td>
                       <td className="py-3 px-4 text-slate-600">{s.academic_year}</td>
+                      <td className="py-3 px-4 text-xs text-slate-600">
+                        {s.class_advisor ? (
+                          <div>
+                            <span className="font-semibold text-slate-800">{s.class_advisor}</span>
+                            {s.mentors && <div className="text-[11px] text-slate-500 mt-0.5">Mentors: {s.mentors}</div>}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic">—</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-slate-600">
                         {s.department_name || `Dept #${s.department_id}`}
                         {s.department_code && (
@@ -570,68 +576,123 @@ export default function AdminMasterData() {
           {/* Faculty Form */}
           {activeSubTab === 'faculty' && (
             <>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Faculty Code</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.faculty_code || ''}
-                  onChange={(e) => setFormData({ ...formData, faculty_code: e.target.value })}
-                  placeholder="e.g. FAC105"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Dr. Jane Smith"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Password {editingItem && <span className="text-xs text-slate-400 font-normal">(Leave blank to keep current)</span>}
-                </label>
-                <input
-                  type="password"
-                  required={!editingItem}
-                  value={formData.password || ''}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="••••••••"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Role</label>
-                  <select
-                    value={formData.role || 'faculty'}
-                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                  >
-                    <option value="faculty">Faculty</option>
-                    <option value="admin">Admin</option>
-                  </select>
+              {/* Cross-department conflict banner */}
+              {conflictFaculty && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-amber-500 text-lg leading-none">⚠️</span>
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">Faculty code already registered in another department</p>
+                      <p className="text-xs text-amber-600 mt-0.5">Is this the same person?</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 bg-white border border-amber-100 rounded-lg px-3 py-2.5">
+                    <span className="text-2xl">👤</span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">{conflictFaculty.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {conflictFaculty.department_name}
+                        {conflictFaculty.department_code && (
+                          <span className="ml-1 inline-block bg-slate-100 text-slate-600 font-mono text-[10px] px-1.5 py-0.5 rounded">
+                            {conflictFaculty.department_code}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setConflictFaculty(null);
+                        addToast(`${conflictFaculty.name} is already in the system and can be assigned to subjects in your department.`, 'success');
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                    >
+                      ✅ Yes, same person
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConflictFaculty(null);
+                        setFormData({ ...formData, faculty_code: '' });
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+                    >
+                      ✎ No, use a different code
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department</label>
-                  <select
-                    value={formData.department_id || ''}
-                    onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name} {d.code ? `(${d.code})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              )}
+
+              {/* Faculty form fields — hide when conflict is shown */}
+              {!conflictFaculty && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Faculty Code</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.faculty_code || ''}
+                      onChange={(e) => setFormData({ ...formData, faculty_code: e.target.value })}
+                      placeholder="e.g. FAC105"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.name || ''}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="e.g. Dr. Jane Smith"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                      Password {editingItem && <span className="text-xs text-slate-400 font-normal">(Leave blank to keep current)</span>}
+                    </label>
+                    <input
+                      type="password"
+                      required={!editingItem}
+                      value={formData.password || ''}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="••••••••"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Role</label>
+                      <select
+                        value={formData.role || 'faculty'}
+                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                      >
+                        <option value="faculty">Faculty</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Department</label>
+                      <select
+                        value={formData.department_id || ''}
+                        onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                      >
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name} {d.code ? `(${d.code})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
             </>
           )}
 
@@ -690,6 +751,28 @@ export default function AdminMasterData() {
                   </select>
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Class Advisor</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mrs. Safmina P.K"
+                    value={formData.class_advisor || ''}
+                    onChange={(e) => setFormData({ ...formData, class_advisor: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Mentors</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mr. Uttam Bhise / Mr. Ede Naveen"
+                    value={formData.mentors || ''}
+                    onChange={(e) => setFormData({ ...formData, mentors: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
             </>
           )}
 
@@ -723,26 +806,36 @@ export default function AdminMasterData() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Semester</label>
-                  <select
-                    value={formData.semester_id || ''}
-                    onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
-                  >
-                    {filteredSemesters.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        Semester {s.number} ({s.class_room}){s.department_name ? ` • ${s.department_name}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  {filteredSemesters.length === 0 ? (
+                    <div className="p-2 border border-rose-200 bg-rose-50 rounded-lg text-xs text-rose-700">
+                      No semesters in this department. Please create a semester first.
+                    </div>
+                  ) : (
+                    <select
+                      required
+                      value={formData.semester_id || ''}
+                      onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                    >
+                      <option value="">Select Semester</option>
+                      {filteredSemesters.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          Semester {s.number} ({s.class_room}){s.department_name ? ` • ${s.department_name}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Faculty In-Charge</label>
                   <select
+                    required
                     value={formData.faculty_id || ''}
                     onChange={(e) => setFormData({ ...formData, faculty_id: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
                   >
-                    {faculty.map((f) => (
+                    <option value="">Select Faculty</option>
+                    {(filteredFaculty.length > 0 ? filteredFaculty : faculty).map((f) => (
                       <option key={f.id} value={f.id}>
                         {f.name} ({f.faculty_code}){f.department_name ? ` • ${f.department_name}` : ''}
                       </option>

@@ -25,13 +25,15 @@ CREATE TABLE IF NOT EXISTS semester (
     number INTEGER NOT NULL CHECK (number > 0),
     department_id INTEGER NOT NULL REFERENCES department(id) ON DELETE CASCADE,
     class_room VARCHAR(100) NOT NULL,
-    academic_year VARCHAR(50) NOT NULL
+    academic_year VARCHAR(50) NOT NULL,
+    class_advisor VARCHAR(255),
+    mentors VARCHAR(255)
 );
 
 -- 4. Subject Table
 CREATE TABLE IF NOT EXISTS subject (
     id SERIAL PRIMARY KEY,
-    subject_code VARCHAR(50) UNIQUE NOT NULL,
+    subject_code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     semester_id INTEGER NOT NULL REFERENCES semester(id) ON DELETE CASCADE,
     faculty_id INTEGER NOT NULL REFERENCES faculty(id) ON DELETE RESTRICT,
@@ -40,7 +42,8 @@ CREATE TABLE IF NOT EXISTS subject (
     is_parallel_activity BOOLEAN NOT NULL DEFAULT FALSE,
     is_generic_activity BOOLEAN NOT NULL DEFAULT FALSE,
     block_session_hours INTEGER NOT NULL DEFAULT 0,
-    block_session_count INTEGER NOT NULL DEFAULT 0
+    block_session_count INTEGER NOT NULL DEFAULT 0,
+    CONSTRAINT uq_subject_semester_code UNIQUE (semester_id, subject_code)
 );
 
 -- 5. Timeslot Table

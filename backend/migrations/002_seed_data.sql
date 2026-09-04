@@ -31,11 +31,11 @@ VALUES
     ('F15', 'Dr. Ganesh K', '$2a$10$PVPFar9SHF2bkYcwrNYBpuD/LBUt4keQzhrgRQai1//TnlrXmj5gu', 'faculty', 1);
 
 -- 3. Insert Semesters (S3, S5, S7)
-INSERT INTO semester (number, department_id, class_room, academic_year)
+INSERT INTO semester (number, department_id, class_room, academic_year, class_advisor, mentors)
 VALUES
-    (3, 1, 'LLH-04', '2026-27'),
-    (5, 1, 'LLH-02', '2026-27'),
-    (7, 1, 'LLH-01', '2026-27');
+    (3, 1, 'LLH-04', '2026-27', 'Mrs. Greeshma T.R', 'Mrs. Anjana Pai K / Mrs. Ramya A'),
+    (5, 1, 'LLH-02', '2026-27', 'Mrs. Safmina P.K', 'Mr. Uttam Bhise / Mr. Ede Naveen'),
+    (7, 1, 'LLH-01', '2026-27', 'Dr. Pooja K Revankar', 'Mr. Augustine Felix Joshy / Dr. Ganesh K');
 
 -- 4. Insert Timeslots (Monday to Saturday, 7 periods per day)
 INSERT INTO timeslot (day, period_number, start_time, end_time)

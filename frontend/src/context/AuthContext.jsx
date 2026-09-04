@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('yensync_token') || null);
   const [loading, setLoading] = useState(true);
 
+  // activeDepartment is always the logged-in user's dept — strictly isolated, no switching
   const [activeDepartment, setActiveDepartment] = useState(() => {
     try {
       const stored = localStorage.getItem('yensync_active_department');
@@ -31,17 +32,15 @@ export function AuthProvider({ children }) {
           const freshUser = await api.getMe();
           setUser(freshUser);
           localStorage.setItem('yensync_user', JSON.stringify(freshUser));
-          
-          // Initialize active department if not yet set
-          if (!activeDepartment && freshUser.department_id) {
-            const deptObj = {
-              id: freshUser.department_id,
-              name: freshUser.department_name,
-              code: freshUser.department_code
-            };
-            setActiveDepartment(deptObj);
-            localStorage.setItem('yensync_active_department', JSON.stringify(deptObj));
-          }
+
+          // Always lock activeDepartment to the logged-in user's dept
+          const deptObj = {
+            id: freshUser.department_id,
+            name: freshUser.department_name,
+            code: freshUser.department_code
+          };
+          setActiveDepartment(deptObj);
+          localStorage.setItem('yensync_active_department', JSON.stringify(deptObj));
         } catch {
           logout();
         }
@@ -58,6 +57,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('yensync_token', res.token);
     localStorage.setItem('yensync_user', JSON.stringify(res.user));
 
+    // Lock to user's own department — strict isolation
     const deptObj = {
       id: res.user.department_id,
       name: res.user.department_name,
@@ -69,15 +69,6 @@ export function AuthProvider({ children }) {
     return res.user;
   };
 
-  const switchDepartment = (dept) => {
-    setActiveDepartment(dept);
-    if (dept) {
-      localStorage.setItem('yensync_active_department', JSON.stringify(dept));
-    } else {
-      localStorage.removeItem('yensync_active_department');
-    }
-  };
-
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -85,18 +76,18 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('yensync_token');
     localStorage.removeItem('yensync_user');
     localStorage.removeItem('yensync_active_department');
+    localStorage.removeItem('yensync_last_dept_id');
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token, 
+    <AuthContext.Provider value={{
+      user,
+      token,
       activeDepartment,
-      switchDepartment,
-      login, 
-      logout, 
-      loading, 
-      isAuthenticated: !!token 
+      login,
+      logout,
+      loading,
+      isAuthenticated: !!token
     }}>
       {children}
     </AuthContext.Provider>

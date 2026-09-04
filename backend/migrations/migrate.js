@@ -23,7 +23,10 @@ async function runMigrations() {
     const migrationFiles = [
       '001_initial_schema.sql',
       '002_seed_data.sql',
-      '003_add_subject_parallel_and_block_columns.sql'
+      '003_add_subject_parallel_and_block_columns.sql',
+      '004_add_generic_activity_and_session_type.sql',
+      '005_add_department_code.sql',
+      '006_scope_subject_code_uniqueness.sql'
     ];
 
     for (const file of migrationFiles) {

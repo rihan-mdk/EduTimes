@@ -76,20 +76,20 @@ async function createSubject(req, res) {
 
     const trimmedCode = subject_code.trim();
 
-    // Step 1: Explicitly check for duplicate subject_code with query logging
-    console.log(`\n🔍 [Subject Validation] Checking uniqueness for subject_code: "${trimmedCode}"`);
-    const checkSql = 'SELECT id, subject_code, name FROM subject WHERE subject_code = $1';
-    console.log(`   SQL: ${checkSql} | Params: [ "${trimmedCode}" ]`);
+    // Step 1: Check for duplicate subject_code within the same semester
+    console.log(`\n🔍 [Subject Validation] Checking uniqueness for subject_code: "${trimmedCode}" in semester ${semester_id}`);
+    const checkSql = 'SELECT id, subject_code, name FROM subject WHERE subject_code = $1 AND semester_id = $2';
+    console.log(`   SQL: ${checkSql} | Params: [ "${trimmedCode}", ${semester_id} ]`);
 
-    const existing = await db.query(checkSql, [trimmedCode]);
+    const existing = await db.query(checkSql, [trimmedCode, semester_id]);
     if (existing.rows.length > 0) {
-      console.warn(`⚠️ [Subject Validation] Duplicate found: ID=${existing.rows[0].id}, Name="${existing.rows[0].name}"`);
+      console.warn(`⚠️ [Subject Validation] Duplicate found in semester: ID=${existing.rows[0].id}, Name="${existing.rows[0].name}"`);
       return res.status(400).json({ 
-        error: `Subject code "${trimmedCode}" is already in use by "${existing.rows[0].name}".`,
+        error: `Subject code "${trimmedCode}" is already in use in this semester by "${existing.rows[0].name}".`,
         field: 'subject_code'
       });
     }
-    console.log(`✅ [Subject Validation] subject_code "${trimmedCode}" is unique and available.`);
+    console.log(`✅ [Subject Validation] subject_code "${trimmedCode}" is available for semester ${semester_id}.`);
 
     const insertSql = `
       INSERT INTO subject (subject_code, name, semester_id, faculty_id, weekly_hours, is_lab, is_parallel_activity, is_generic_activity, block_session_hours, block_session_count)
@@ -148,13 +148,13 @@ async function updateSubject(req, res) {
     const { id } = req.params;
     const trimmedCode = subject_code.trim();
 
-    // Check if code is taken by another subject
-    console.log(`\n🔍 [Subject Update Validation] Checking code "${trimmedCode}" for ID != ${id}`);
-    const checkSql = 'SELECT id, name FROM subject WHERE subject_code = $1 AND id != $2';
-    const existing = await db.query(checkSql, [trimmedCode, id]);
+    // Check if code is taken by another subject in the same semester
+    console.log(`\n🔍 [Subject Update Validation] Checking code "${trimmedCode}" for semester ${semester_id} and ID != ${id}`);
+    const checkSql = 'SELECT id, name FROM subject WHERE subject_code = $1 AND semester_id = $2 AND id != $3';
+    const existing = await db.query(checkSql, [trimmedCode, semester_id, id]);
     if (existing.rows.length > 0) {
-      console.warn(`⚠️ [Subject Update] Code "${trimmedCode}" already used by "${existing.rows[0].name}"`);
-      return res.status(400).json({ error: `Subject code "${trimmedCode}" already in use by "${existing.rows[0].name}".` });
+      console.warn(`⚠️ [Subject Update] Code "${trimmedCode}" already used in this semester by "${existing.rows[0].name}"`);
+      return res.status(400).json({ error: `Subject code "${trimmedCode}" is already in use in this semester by "${existing.rows[0].name}".` });
     }
 
     const updateSql = `

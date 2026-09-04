@@ -49,18 +49,43 @@ async function createFaculty(req, res) {
 
     const trimmedCode = faculty_code.trim();
 
-    // Step 1: Explicitly check for duplicate faculty_code with query logging
+    // Step 1: Check for duplicate faculty_code — join department for context
     console.log(`\n🔍 [Faculty Validation] Checking uniqueness for faculty_code: "${trimmedCode}"`);
-    const checkSql = 'SELECT id, faculty_code, name FROM faculty WHERE faculty_code = $1';
-    console.log(`   SQL: ${checkSql} | Params: [ "${trimmedCode}" ]`);
-    
+    const checkSql = `
+      SELECT f.id, f.faculty_code, f.name, f.department_id,
+             d.name AS department_name, d.code AS department_code
+      FROM faculty f
+      LEFT JOIN department d ON f.department_id = d.id
+      WHERE f.faculty_code = $1
+    `;
+    console.log(`   SQL: (faculty + dept join) | Params: [ "${trimmedCode}" ]`);
+
     const existing = await db.query(checkSql, [trimmedCode]);
     if (existing.rows.length > 0) {
-      console.warn(`⚠️ [Faculty Validation] Duplicate found: ID=${existing.rows[0].id}, Name="${existing.rows[0].name}"`);
-      return res.status(400).json({ 
-        error: `Faculty code "${trimmedCode}" is already in use by ${existing.rows[0].name}.`,
-        field: 'faculty_code'
-      });
+      const found = existing.rows[0];
+      const isSameDept = String(found.department_id) === String(department_id);
+
+      if (isSameDept) {
+        // Genuine duplicate within the same department → hard error
+        console.warn(`⚠️ [Faculty Validation] Same-dept duplicate: ID=${found.id}, Name="${found.name}"`);
+        return res.status(400).json({
+          error: `Faculty code "${trimmedCode}" is already in use by ${found.name} in this department.`,
+          field: 'faculty_code'
+        });
+      } else {
+        // Cross-department clash → soft 409, let the UI ask the user
+        console.warn(`ℹ️ [Faculty Validation] Cross-dept code: ID=${found.id}, Name="${found.name}", Dept="${found.department_name}"`);
+        return res.status(409).json({
+          conflict: true,
+          message: `Faculty code "${trimmedCode}" is already registered in another department.`,
+          existing: {
+            id: found.id,
+            name: found.name,
+            department_name: found.department_name || 'Unknown Department',
+            department_code: found.department_code || '',
+          }
+        });
+      }
     }
     console.log(`✅ [Faculty Validation] faculty_code "${trimmedCode}" is unique and available.`);
 

@@ -41,7 +41,7 @@ async function getSemesterById(req, res) {
 
 async function createSemester(req, res) {
   try {
-    const { number, department_id, class_room, academic_year } = req.body;
+    const { number, department_id, class_room, academic_year, class_advisor, mentors } = req.body;
     if (!number || !department_id || !class_room || !academic_year) {
       return res.status(400).json({ error: 'number, department_id, class_room, and academic_year are required' });
     }
@@ -50,6 +50,8 @@ async function createSemester(req, res) {
     const deptId = parseInt(department_id, 10);
     const year = academic_year.trim();
     const room = class_room.trim();
+    const advisor = class_advisor ? class_advisor.trim() : null;
+    const mentorsList = mentors ? mentors.trim() : null;
 
     // Step 1: Pre-validate duplicate semester number in the same department & academic year
     console.log(`\n🔍 [Semester Validation] Checking semester #${semNum} for Department #${deptId} (${year})`);
@@ -67,13 +69,13 @@ async function createSemester(req, res) {
     console.log(`✅ [Semester Validation] Semester #${semNum} is available.`);
 
     const insertSql = `
-      INSERT INTO semester (number, department_id, class_room, academic_year)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO semester (number, department_id, class_room, academic_year, class_advisor, mentors)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
     console.log(`📝 [Semester Insert] Executing insert for Semester ${semNum} (Room: ${room})`);
 
-    const result = await db.query(insertSql, [semNum, deptId, room, year]);
+    const result = await db.query(insertSql, [semNum, deptId, room, year, advisor, mentorsList]);
     console.log(`🎉 [Semester Insert] Successfully created semester ID=${result.rows[0].id}`);
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -93,13 +95,15 @@ async function createSemester(req, res) {
 
 async function updateSemester(req, res) {
   try {
-    const { number, department_id, class_room, academic_year } = req.body;
+    const { number, department_id, class_room, academic_year, class_advisor, mentors } = req.body;
     const { id } = req.params;
 
     const semNum = parseInt(number, 10);
     const deptId = parseInt(department_id, 10);
     const year = academic_year.trim();
     const room = class_room.trim();
+    const advisor = class_advisor !== undefined ? (class_advisor ? class_advisor.trim() : null) : null;
+    const mentorsList = mentors !== undefined ? (mentors ? mentors.trim() : null) : null;
 
     console.log(`\n🔍 [Semester Update Validation] Checking semester #${semNum} for ID != ${id}`);
     const checkSql = 'SELECT id FROM semester WHERE number = $1 AND department_id = $2 AND academic_year = $3 AND id != $4';
@@ -111,11 +115,11 @@ async function updateSemester(req, res) {
 
     const updateSql = `
       UPDATE semester
-      SET number = $1, department_id = $2, class_room = $3, academic_year = $4
-      WHERE id = $5
+      SET number = $1, department_id = $2, class_room = $3, academic_year = $4, class_advisor = $5, mentors = $6
+      WHERE id = $7
       RETURNING *
     `;
-    const result = await db.query(updateSql, [semNum, deptId, room, year, id]);
+    const result = await db.query(updateSql, [semNum, deptId, room, year, advisor, mentorsList, id]);
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Semester not found' });
     res.json(result.rows[0]);
