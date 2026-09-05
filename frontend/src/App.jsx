@@ -5,17 +5,24 @@ import Login from './pages/Login';
 import AdminTimetable from './pages/AdminTimetable';
 import AdminMasterData from './pages/AdminMasterData';
 import FacultyDashboard from './pages/FacultyDashboard';
+import SplashScreen from './components/SplashScreen';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
   const { user, loading, isAuthenticated } = useAuth();
   const [adminActiveTab, setAdminActiveTab] = useState('timetable'); // 'timetable' | 'masterdata'
+  const [splashDone, setSplashDone] = useState(false);
+
+  // Show splash screen on first load (covers auth loading period too)
+  if (!splashDone) {
+    return <SplashScreen onDone={() => setSplashDone(true)} />;
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mb-3" />
-        <p className="text-sm font-medium text-slate-500">Initializing YenSync Session...</p>
+        <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-3" />
+        <p className="text-sm font-medium text-slate-500">Initializing EduTimes...</p>
       </div>
     );
   }

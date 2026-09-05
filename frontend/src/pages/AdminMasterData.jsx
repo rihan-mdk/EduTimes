@@ -242,7 +242,7 @@ export default function AdminMasterData() {
 
         <button
           onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add New {activeSubTab.slice(0, -1)}
@@ -252,7 +252,7 @@ export default function AdminMasterData() {
       {/* Main Table Content */}
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-slate-200">
-          <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mb-2" />
+          <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-2" />
           <p className="text-sm text-slate-500">Loading master data...</p>
         </div>
       ) : (
@@ -310,7 +310,7 @@ export default function AdminMasterData() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditModal(sub)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -349,7 +349,7 @@ export default function AdminMasterData() {
                       <td className="py-3 px-4 font-medium text-slate-800">{f.name}</td>
                       <td className="py-3 px-4">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium uppercase ${
-                          f.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'
+                          f.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
                         }`}>
                           {f.role}
                         </span>
@@ -366,7 +366,7 @@ export default function AdminMasterData() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditModal(f)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -403,7 +403,7 @@ export default function AdminMasterData() {
                   {filteredSemesters.map((s) => (
                     <tr key={s.id} className="hover:bg-slate-50/75 transition-colors">
                       <td className="py-3 px-4 font-bold text-slate-900">Semester {s.number} (S{s.number})</td>
-                      <td className="py-3 px-4 font-mono font-medium text-emerald-700">{s.class_room}</td>
+                      <td className="py-3 px-4 font-mono font-medium text-orange-700">{s.class_room}</td>
                       <td className="py-3 px-4 text-slate-600">{s.academic_year}</td>
                       <td className="py-3 px-4 text-xs text-slate-600">
                         {s.class_advisor ? (
@@ -427,7 +427,7 @@ export default function AdminMasterData() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditModal(s)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -474,7 +474,7 @@ export default function AdminMasterData() {
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditModal(ts)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -510,14 +510,14 @@ export default function AdminMasterData() {
                     <tr key={d.id} className="hover:bg-slate-50/75 transition-colors">
                       <td className="py-3 px-4 font-mono text-slate-500">#{d.id}</td>
                       <td className="py-3 px-4 font-medium text-slate-900">{d.name}</td>
-                      <td className="py-3 px-4 font-mono font-semibold text-emerald-700">
+                      <td className="py-3 px-4 font-mono font-semibold text-orange-700">
                         {d.code || '—'}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
                             onClick={() => handleOpenEditModal(d)}
-                            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-500 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
@@ -556,7 +556,7 @@ export default function AdminMasterData() {
                   value={formData.name || ''}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Mechanical Engineering"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                 />
               </div>
               <div>
@@ -567,7 +567,7 @@ export default function AdminMasterData() {
                   value={formData.code || ''}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   placeholder="e.g. MECH"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none uppercase font-mono"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none uppercase font-mono"
                 />
               </div>
             </div>
@@ -608,7 +608,7 @@ export default function AdminMasterData() {
                         setConflictFaculty(null);
                         addToast(`${conflictFaculty.name} is already in the system and can be assigned to subjects in your department.`, 'success');
                       }}
-                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg transition-colors"
                     >
                       ✅ Yes, same person
                     </button>
@@ -637,7 +637,7 @@ export default function AdminMasterData() {
                       value={formData.faculty_code || ''}
                       onChange={(e) => setFormData({ ...formData, faculty_code: e.target.value })}
                       placeholder="e.g. FAC105"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                     />
                   </div>
                   <div>
@@ -648,7 +648,7 @@ export default function AdminMasterData() {
                       value={formData.name || ''}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       placeholder="e.g. Dr. Jane Smith"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                     />
                   </div>
                   <div>
@@ -661,7 +661,7 @@ export default function AdminMasterData() {
                       value={formData.password || ''}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -670,7 +670,7 @@ export default function AdminMasterData() {
                       <select
                         value={formData.role || 'faculty'}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                       >
                         <option value="faculty">Faculty</option>
                         <option value="admin">Admin</option>
@@ -681,7 +681,7 @@ export default function AdminMasterData() {
                       <select
                         value={formData.department_id || ''}
                         onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                       >
                         {departments.map((d) => (
                           <option key={d.id} value={d.id}>
@@ -709,7 +709,7 @@ export default function AdminMasterData() {
                     required
                     value={formData.number || ''}
                     onChange={(e) => setFormData({ ...formData, number: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
                 <div>
@@ -720,7 +720,7 @@ export default function AdminMasterData() {
                     placeholder="e.g. LH-301"
                     value={formData.class_room || ''}
                     onChange={(e) => setFormData({ ...formData, class_room: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
               </div>
@@ -733,7 +733,7 @@ export default function AdminMasterData() {
                     placeholder="e.g. 2025-2026"
                     value={formData.academic_year || '2025-2026'}
                     onChange={(e) => setFormData({ ...formData, academic_year: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
                 <div>
@@ -741,7 +741,7 @@ export default function AdminMasterData() {
                   <select
                     value={formData.department_id || ''}
                     onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                   >
                     {departments.map((d) => (
                       <option key={d.id} value={d.id}>
@@ -759,7 +759,7 @@ export default function AdminMasterData() {
                     placeholder="e.g. Mrs. Safmina P.K"
                     value={formData.class_advisor || ''}
                     onChange={(e) => setFormData({ ...formData, class_advisor: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
                 <div>
@@ -769,7 +769,7 @@ export default function AdminMasterData() {
                     placeholder="e.g. Mr. Uttam Bhise / Mr. Ede Naveen"
                     value={formData.mentors || ''}
                     onChange={(e) => setFormData({ ...formData, mentors: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
               </div>
@@ -788,7 +788,7 @@ export default function AdminMasterData() {
                     placeholder="e.g. CS301"
                     value={formData.subject_code || ''}
                     onChange={(e) => setFormData({ ...formData, subject_code: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
                 <div>
@@ -799,7 +799,7 @@ export default function AdminMasterData() {
                     placeholder="e.g. Data Structures"
                     value={formData.name || ''}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
               </div>
@@ -815,7 +815,7 @@ export default function AdminMasterData() {
                       required
                       value={formData.semester_id || ''}
                       onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                     >
                       <option value="">Select Semester</option>
                       {filteredSemesters.map((s) => (
@@ -832,7 +832,7 @@ export default function AdminMasterData() {
                     required
                     value={formData.faculty_id || ''}
                     onChange={(e) => setFormData({ ...formData, faculty_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                   >
                     <option value="">Select Faculty</option>
                     {(filteredFaculty.length > 0 ? filteredFaculty : faculty).map((f) => (
@@ -853,7 +853,7 @@ export default function AdminMasterData() {
                     required
                     value={formData.weekly_hours || 4}
                     onChange={(e) => setFormData({ ...formData, weekly_hours: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
                 <div className="pt-5">
@@ -862,7 +862,7 @@ export default function AdminMasterData() {
                       type="checkbox"
                       checked={formData.is_lab || false}
                       onChange={(e) => setFormData({ ...formData, is_lab: e.target.checked })}
-                      className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500"
+                      className="w-4 h-4 text-orange-500 rounded border-slate-300 focus:ring-orange-400"
                     />
                     Is Laboratory Session?
                   </label>
@@ -902,7 +902,7 @@ export default function AdminMasterData() {
                   <select
                     value={formData.day || 'Monday'}
                     onChange={(e) => setFormData({ ...formData, day: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                   >
                     {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -918,7 +918,7 @@ export default function AdminMasterData() {
                     required
                     value={formData.period_number || 1}
                     onChange={(e) => setFormData({ ...formData, period_number: parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
               </div>
@@ -931,7 +931,7 @@ export default function AdminMasterData() {
                     required
                     value={formData.start_time || '09:00:00'}
                     onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
                 <div>
@@ -942,7 +942,7 @@ export default function AdminMasterData() {
                     required
                     value={formData.end_time || '09:55:00'}
                     onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
               </div>
@@ -960,7 +960,7 @@ export default function AdminMasterData() {
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {editingItem ? 'Save Changes' : 'Create Item'}

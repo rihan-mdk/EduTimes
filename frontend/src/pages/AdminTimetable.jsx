@@ -796,13 +796,13 @@ export default function AdminTimetable() {
                 }}
                 className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
                   String(selectedSemesterId) === String(s.id)
-                    ? 'bg-emerald-600 text-white shadow-sm'
+                    ? 'bg-orange-500 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 <span>Semester {s.number} (S{s.number})</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
-                  String(selectedSemesterId) === String(s.id) ? 'bg-emerald-700 text-emerald-100' : 'bg-slate-200 text-slate-600'
+                  String(selectedSemesterId) === String(s.id) ? 'bg-orange-600 text-orange-100' : 'bg-slate-200 text-slate-600'
                 }`}>
                   {s.class_room}
                 </span>
@@ -839,7 +839,7 @@ export default function AdminTimetable() {
           <button
             onClick={handleAutoGenerate}
             disabled={generating}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-colors"
           >
             {generating ? (
               <>
@@ -885,7 +885,7 @@ export default function AdminTimetable() {
                 {activeDepartment ? `${activeDepartment.name} — ` : ''}Semester {currentSemester?.number || ''} Weekly Schedule
               </h2>
               {activeDepartment?.code && (
-                <span className="font-mono text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                <span className="font-mono text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
                   {activeDepartment.code}
                 </span>
               )}
@@ -910,14 +910,14 @@ export default function AdminTimetable() {
               <button
                 type="button"
                 onClick={handleOpenSemesterModal}
-                className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 font-semibold hover:underline cursor-pointer text-xs"
+                className="inline-flex items-center gap-1 text-orange-700 hover:text-orange-800 font-semibold hover:underline cursor-pointer text-xs"
                 title="Edit Classroom, Class Advisor, and Mentors"
               >
                 <Pencil className="w-3 h-3" />
                 <span>Edit Details</span>
               </button>
               <span>•</span>
-              <span className="text-emerald-700 font-medium">{timetableEntries.length} periods scheduled</span>
+              <span className="text-orange-700 font-medium">{timetableEntries.length} periods scheduled</span>
             </div>
           </div>
 
@@ -1027,7 +1027,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 1)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_1` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_1` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_1`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 1)} />
@@ -1040,7 +1040,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 2)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_2` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_2` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_2`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 2)} />
@@ -1058,7 +1058,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 3)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_3` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_3` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_3`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 3)} />
@@ -1071,7 +1071,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 4)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_4` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_4` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_4`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 4)} />
@@ -1089,7 +1089,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 5)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_5` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_5` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_5`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 5)} />
@@ -1102,7 +1102,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 6)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_6` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_6` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_6`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 6)} />
@@ -1115,7 +1115,7 @@ export default function AdminTimetable() {
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, 7)}
                       className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_7` ? 'bg-emerald-100 border-emerald-400 border-2' : 'hover:bg-emerald-50/50'
+                        dragOverKey === `${day}_7` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                       }`}
                     >
                       <SlotCell entries={gridMap.get(`${day}_7`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 7)} />
@@ -1145,7 +1145,7 @@ export default function AdminTimetable() {
                   </thead>
                   <tbody>
                     {legendRows.map((entry) => (
-                      <tr key={entry.subject_code} className="even:bg-slate-50 hover:bg-emerald-50/40 transition-colors">
+                      <tr key={entry.subject_code} className="even:bg-slate-50 hover:bg-orange-50/40 transition-colors">
                         <td className="border border-slate-300 px-3 py-1.5 font-mono font-bold text-xs text-slate-800">
                           {entry.subject_code}
                         </td>
@@ -1169,7 +1169,7 @@ export default function AdminTimetable() {
       {movingSlot && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl px-6 py-4 flex items-center gap-3">
-            <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+            <Loader2 className="w-5 h-5 animate-spin text-orange-500" />
             <span className="text-sm font-semibold text-slate-700">Moving subject...</span>
           </div>
         </div>
@@ -1199,7 +1199,7 @@ export default function AdminTimetable() {
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
                 <span className="text-slate-600">
                   Incoming: <strong>{parallelDialog.drag.subjectCode}</strong>
                 </span>
@@ -1216,7 +1216,7 @@ export default function AdminTimetable() {
                   type="button"
                   onClick={handleConfirmParallel}
                   disabled={parallelDialog.targetEntries.length >= 2}
-                  className="flex-1 py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
+                  className="flex-1 py-2 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
                   title="Schedule both subjects in parallel"
                 >
                   ✅ Yes, make parallel
@@ -1286,7 +1286,7 @@ export default function AdminTimetable() {
                         onClick={() => handleSelectOccupant(idx)}
                         className={`px-3 py-1.5 text-xs font-bold rounded-l-lg border transition-all flex items-center gap-1.5 ${
                           selectedOccupantIndex === idx
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                            ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
                             : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -1339,7 +1339,7 @@ export default function AdminTimetable() {
             <select
               value={selectedSubjectId}
               onChange={(e) => handleSubjectChange(e.target.value, replaceEntireSlot)}
-              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none bg-white font-medium"
+              className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white font-medium"
             >
               <option value="">-- Empty Slot (Remove / Free) --</option>
               {semesterSubjects.map((sub) => (
@@ -1404,7 +1404,7 @@ export default function AdminTimetable() {
           {/* Validation Status Indicator */}
           {validating && (
             <div className="flex items-center gap-2 text-xs text-slate-500 py-1">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
               <span>Checking real-time faculty and semester clash constraints...</span>
             </div>
           )}
@@ -1422,8 +1422,8 @@ export default function AdminTimetable() {
 
           {/* No Clash / Valid Indicator */}
           {!validating && !clashWarning && selectedSubjectId && (
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+            <div className="p-2.5 bg-orange-50 border border-orange-200 rounded-lg text-orange-800 text-xs flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-orange-500 flex-shrink-0" />
               <span>Zero clashes found. Faculty and semester are free for this slot.</span>
             </div>
           )}
@@ -1441,7 +1441,7 @@ export default function AdminTimetable() {
               type="button"
               onClick={handleSaveSlot}
               disabled={savingSlot || !!clashWarning || validating}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-40 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-40 transition-colors"
             >
               {savingSlot && <Loader2 className="w-4 h-4 animate-spin" />}
               Save Slot

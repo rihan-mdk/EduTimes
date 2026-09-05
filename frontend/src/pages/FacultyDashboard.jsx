@@ -111,7 +111,7 @@ export default function FacultyDashboard() {
         {/* Welcome & Date Card */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
-            <div className="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Faculty Portal</div>
+            <div className="text-xs font-semibold text-orange-500 uppercase tracking-wider">Faculty Portal</div>
             <h2 className="text-xl font-bold text-slate-900 mt-1">Hello, {user?.name}</h2>
             <div className="flex items-center gap-2 text-xs text-slate-500 mt-2 font-medium">
               <CalendarIcon className="w-4 h-4 text-slate-400" />
@@ -127,16 +127,16 @@ export default function FacultyDashboard() {
         {/* Current Class Card */}
         <div className={`p-5 rounded-xl border shadow-sm transition-all ${
           currentClass 
-            ? 'bg-emerald-50 border-emerald-300 text-emerald-950 ring-2 ring-emerald-500/20' 
+            ? 'bg-orange-50 border-orange-300 text-orange-950 ring-2 ring-orange-500/20' 
             : 'bg-white border-slate-200 text-slate-800'
         }`}>
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider text-orange-700 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
               Current Ongoing Class
             </span>
             {currentClass && (
-              <span className="text-xs font-mono bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded font-bold">
+              <span className="text-xs font-mono bg-orange-200 text-orange-900 px-2 py-0.5 rounded font-bold">
                 Period {currentClass.period_number}
               </span>
             )}
@@ -144,9 +144,9 @@ export default function FacultyDashboard() {
 
           {currentClass ? (
             <div className="mt-3 space-y-1.5">
-              <div className="font-mono font-bold text-lg text-emerald-900">{currentClass.subject_code}</div>
-              <div className="text-sm font-semibold text-emerald-950">{currentClass.subject_name}</div>
-              <div className="flex items-center gap-3 text-xs text-emerald-800 pt-1 font-medium">
+              <div className="font-mono font-bold text-lg text-orange-900">{currentClass.subject_code}</div>
+              <div className="text-sm font-semibold text-orange-950">{currentClass.subject_name}</div>
+              <div className="flex items-center gap-3 text-xs text-orange-800 pt-1 font-medium">
                 <span className="flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5" /> Room {currentClass.class_room} (Semester {currentClass.semester_number})
                 </span>
@@ -219,7 +219,7 @@ export default function FacultyDashboard() {
 
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16">
-            <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mb-2" />
+            <Loader2 className="w-8 h-8 text-orange-500 animate-spin mb-2" />
             <p className="text-sm text-slate-500">Loading your schedule...</p>
           </div>
         ) : (
@@ -287,14 +287,14 @@ export default function FacultyDashboard() {
                 {DAYS.map((day) => {
                   const isToday = day === todayDayName;
                   return (
-                    <tr key={day} className={`h-20 ${isToday ? 'bg-emerald-50/30' : ''}`}>
+                    <tr key={day} className={`h-20 ${isToday ? 'bg-orange-50/30' : ''}`}>
                       <td className={`border border-slate-300 font-bold text-xs px-2 py-3 ${
-                        isToday ? 'bg-emerald-100 text-emerald-950 font-black' : 'bg-slate-50 text-slate-900'
+                        isToday ? 'bg-orange-100 text-orange-950 font-black' : 'bg-slate-50 text-slate-900'
                       }`}>
                         <div className="flex flex-col items-center">
                           <span>{day}</span>
                           {isToday && (
-                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 mt-0.5 rounded bg-emerald-600 text-white">
+                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 mt-0.5 rounded bg-orange-500 text-white">
                               Today
                             </span>
                           )}

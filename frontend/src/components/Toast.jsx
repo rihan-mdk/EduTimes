@@ -31,13 +31,13 @@ export function ToastProvider({ children }) {
               toast.type === 'error'
                 ? 'bg-rose-50 border-rose-200 text-rose-800'
                 : toast.type === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                ? 'bg-orange-50 border-orange-200 text-orange-800'
                 : 'bg-slate-800 border-slate-700 text-white'
             }`}
           >
             <div className="flex items-start gap-2.5">
               {toast.type === 'error' && <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />}
-              {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />}
+              {toast.type === 'success' && <CheckCircle className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />}
               {toast.type === 'info' && <Info className="w-5 h-5 text-sky-400 flex-shrink-0 mt-0.5" />}
               <div className="font-medium leading-snug break-words">{toast.message}</div>
             </div>
