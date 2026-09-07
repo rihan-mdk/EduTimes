@@ -18,7 +18,10 @@ import {
   Utensils,
   Building2,
   RotateCcw,
-  Pencil
+  Pencil,
+  BookOpen,
+  Users,
+  Layers
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -63,6 +66,7 @@ export default function AdminTimetable() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [overviewTab, setOverviewTab] = useState('subjects'); // 'subjects' | 'faculty'
 
   // Manual Edit State (Slot click)
   const [selectedSlot, setSelectedSlot] = useState(null); // { day, period_number, timeslot_id, existingEntries }
@@ -161,6 +165,29 @@ export default function AdminTimetable() {
 
   const currentSemester = semesters.find(s => String(s.id) === String(selectedSemesterId));
   const semesterSubjects = subjects.filter(s => String(s.semester_id) === String(selectedSemesterId));
+
+  // Unique faculty teaching in the currently selected semester
+  const semesterFacultyList = React.useMemo(() => {
+    const facMap = new Map();
+    semesterSubjects.forEach(sub => {
+      if (sub.faculty_id) {
+        if (!facMap.has(sub.faculty_id)) {
+          facMap.set(sub.faculty_id, {
+            id: sub.faculty_id,
+            name: sub.faculty_name,
+            faculty_code: sub.faculty_code,
+            subjects: [sub],
+            totalHours: Number(sub.weekly_hours) || 0
+          });
+        } else {
+          const item = facMap.get(sub.faculty_id);
+          item.subjects.push(sub);
+          item.totalHours += (Number(sub.weekly_hours) || 0);
+        }
+      }
+    });
+    return Array.from(facMap.values());
+  }, [semesterSubjects]);
 
   // Build Grid Map: Key `day_period` -> Array of entries (supports parallel activities)
   const gridMap = new Map();
@@ -1148,6 +1175,213 @@ export default function AdminTimetable() {
           })()}
         </div>
       </div>
+
+      {/* ── Semester Overview: Subjects & Faculty Directory (Separated View) ── */}
+      {currentSemester && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
+          {/* Header with Sub-tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div className="flex items-center gap-2.5">
+              <span className="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                S{currentSemester.number}
+              </span>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Semester {currentSemester.number} Directory: Subjects & Faculty Allocation
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Clear visual allocation of subjects and teaching staff for {activeDepartment?.name || 'Department'}
+                </p>
+              </div>
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setOverviewTab('subjects')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                  overviewTab === 'subjects'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Subjects ({semesterSubjects.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOverviewTab('faculty')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                  overviewTab === 'faculty'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Faculty ({semesterFacultyList.length})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TAB 1: SUBJECTS DIRECTORY */}
+          {overviewTab === 'subjects' && (
+            <div className="space-y-3">
+              {semesterSubjects.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  No subjects configured for Semester {currentSemester.number} yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {semesterSubjects.map((sub) => {
+                    const scheduledCount = timetableEntries.filter(e => String(e.subject_id) === String(sub.id)).length;
+                    const requiredHours = Number(sub.weekly_hours) || 0;
+                    const isFullyScheduled = scheduledCount >= requiredHours && requiredHours > 0;
+
+                    return (
+                      <div
+                        key={sub.id}
+                        className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3.5 flex flex-col justify-between gap-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-mono font-bold text-sm text-slate-900">
+                              {sub.subject_code}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                              sub.is_lab ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {sub.is_lab ? 'Lab' : 'Theory'}
+                            </span>
+                          </div>
+
+                          <p className="text-xs font-medium text-slate-700 line-clamp-2" title={sub.name}>
+                            {sub.name}
+                          </p>
+
+                          <div className="flex items-center gap-1.5 text-xs text-slate-600 pt-1 border-t border-slate-200/60">
+                            <span className="text-slate-400">Faculty:</span>
+                            {sub.faculty_name ? (
+                              <span className="font-semibold text-slate-800">
+                                {sub.faculty_name} <span className="font-mono text-[10px] text-slate-500">({sub.faculty_code})</span>
+                              </span>
+                            ) : (
+                              <span className="text-amber-600 italic">Unassigned</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Progress Bar for Hours Scheduled */}
+                        <div className="space-y-1 pt-1 border-t border-slate-200/60">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-500">Schedule Status</span>
+                            <span className={`font-semibold font-mono ${
+                              isFullyScheduled ? 'text-emerald-700' : scheduledCount > 0 ? 'text-orange-600' : 'text-slate-500'
+                            }`}>
+                              {scheduledCount} / {requiredHours} hrs
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                isFullyScheduled ? 'bg-emerald-500' : scheduledCount > 0 ? 'bg-orange-500' : 'bg-slate-300'
+                              }`}
+                              style={{
+                                width: requiredHours > 0 ? `${Math.min(100, (scheduledCount / requiredHours) * 100)}%` : '0%'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: FACULTY DIRECTORY & MULTI-SEMESTER ALLOCATION */}
+          {overviewTab === 'faculty' && (
+            <div className="space-y-3">
+              {semesterFacultyList.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  No faculty assigned to Semester {currentSemester.number} subjects yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {semesterFacultyList.map((item) => {
+                    // Check if this faculty teaches in other semesters
+                    const otherSemSubs = subjects.filter(
+                      s => s.faculty_id === item.id && String(s.semester_id) !== String(selectedSemesterId)
+                    );
+                    const otherSemNumbers = Array.from(
+                      new Set(otherSemSubs.map(s => s.semester_number || s.semester_id))
+                    ).sort((a, b) => Number(a) - Number(b));
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3.5 flex flex-col justify-between gap-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <h4 className="font-bold text-slate-900 text-sm">{item.name}</h4>
+                              <span className="font-mono text-xs text-slate-500">{item.faculty_code}</span>
+                            </div>
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-800 font-mono">
+                              {item.totalHours} hrs/wk in S{currentSemester.number}
+                            </span>
+                          </div>
+
+                          {/* Subjects taught in this semester */}
+                          <div className="space-y-1">
+                            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                              Assigned in S{currentSemester.number}:
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {item.subjects.map((s) => (
+                                <span
+                                  key={s.id}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-slate-200 text-slate-800 shadow-xs"
+                                >
+                                  <strong className="font-mono text-orange-700">{s.subject_code}</strong>
+                                  <span className="text-slate-500 text-[10px]">({s.weekly_hours}h)</span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Multi-semester tag */}
+                        <div className="pt-2 border-t border-slate-200/60">
+                          {otherSemNumbers.length > 0 ? (
+                            <div className="flex items-center gap-1.5 text-xs text-purple-800 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
+                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse shrink-0" />
+                              <span className="font-semibold">Also in:</span>
+                              <span className="font-mono font-bold">
+                                {otherSemNumbers.map(n => `S${n}`).join(', ')}
+                              </span>
+                              <span className="text-purple-600 text-[10px] truncate">
+                                ({otherSemSubs.map(s => s.subject_code).join(', ')})
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">
+                              Teaching only in Semester {currentSemester.number}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Moving slot spinner overlay */}
       {movingSlot && (
