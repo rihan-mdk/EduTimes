@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: edutimes-backend
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        value: postgresql://postgres.qpxoabpqnwigqyaqrqrj:YenSyncDB2026Strong@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
