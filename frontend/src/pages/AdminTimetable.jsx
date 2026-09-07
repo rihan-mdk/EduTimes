@@ -5,16 +5,16 @@ import { useToast } from '../components/Toast';
 import Modal from '../components/Modal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-import { 
-  Sparkles, 
-  Download, 
-  Trash2, 
-  Loader2, 
-  AlertCircle, 
-  CheckCircle2, 
-  X, 
-  Clock, 
-  Coffee, 
+import {
+  Sparkles,
+  Download,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+  X,
+  Clock,
+  Coffee,
   Utensils,
   Building2,
   RotateCcw,
@@ -33,6 +33,18 @@ const PERIOD_TIMES = {
   5: '13:50 - 14:40',
   6: '14:40 - 15:30',
   7: '15:30 - 16:15',
+};
+
+// Lab block merge: pairs of adjacent periods with NO break column between them.
+// (2→3) and (4→5) are invalid — a Tea/Lunch break column sits between them in the HTML table.
+const LAB_MERGE_CANDIDATES = [[1, 2], [3, 4], [5, 6], [6, 7]];
+
+// Merged time display for 2-hour lab blocks
+const MERGED_PERIOD_TIMES = {
+  '1_2': '09:00 - 10:50',
+  '3_4': '11:10 - 13:00',
+  '5_6': '13:50 - 15:30',
+  '6_7': '14:40 - 16:15',
 };
 
 export default function AdminTimetable() {
@@ -90,7 +102,7 @@ export default function AdminTimetable() {
         setSubjects(subRes);
         setTimeslots(tsRes);
 
-        const activeSemList = activeDepartment?.id 
+        const activeSemList = activeDepartment?.id
           ? semRes.filter(s => String(s.department_id) === String(activeDepartment.id))
           : semRes;
 
@@ -111,7 +123,7 @@ export default function AdminTimetable() {
   }, []);
 
   // Filter semesters by active department if set
-  const filteredSemesters = activeDepartment?.id 
+  const filteredSemesters = activeDepartment?.id
     ? semesters.filter(s => String(s.department_id) === String(activeDepartment.id))
     : semesters;
 
@@ -494,7 +506,7 @@ export default function AdminTimetable() {
   const handleSlotClick = (day, period_number) => {
     const existingEntriesList = gridMap.get(`${day}_${period_number}`) || [];
     const firstEntry = existingEntriesList[0] || null;
-    
+
     let ts = timeslots.find(t => t.day === day && t.period_number === period_number);
     const timeslot_id = ts ? ts.id : (firstEntry ? firstEntry.timeslot_id : null);
 
@@ -567,10 +579,10 @@ export default function AdminTimetable() {
       } else {
         const curDay = selectedSlot?.day;
         const curPeriod = selectedSlot?.period_number;
-        const isAdjacentSameSub = 
+        const isAdjacentSameSub =
           (curPeriod > 1 && (gridMap.get(`${curDay}_${curPeriod - 1}`) || []).some(e => String(e.subject_id) === String(newSubjectId))) ||
           ((gridMap.get(`${curDay}_${curPeriod + 1}`) || []).some(e => String(e.subject_id) === String(newSubjectId)));
-        
+
         if (isAdjacentSameSub || Number(chosenSub.block_session_hours) > 1) {
           setCustomSessionType('lab');
         } else {
@@ -584,8 +596,8 @@ export default function AdminTimetable() {
       return;
     }
 
-    const currentEntry = selectedOccupantIndex !== 'new' 
-      ? selectedSlot.existingEntries[selectedOccupantIndex] 
+    const currentEntry = selectedOccupantIndex !== 'new'
+      ? selectedSlot.existingEntries[selectedOccupantIndex]
       : null;
 
     // When replacing the entire slot, all occupants will be deleted.
@@ -633,8 +645,8 @@ export default function AdminTimetable() {
       return;
     }
 
-    const currentEntry = selectedOccupantIndex !== 'new' 
-      ? selectedSlot.existingEntries[selectedOccupantIndex] 
+    const currentEntry = selectedOccupantIndex !== 'new'
+      ? selectedSlot.existingEntries[selectedOccupantIndex]
       : null;
 
     const selectedSubject = semesterSubjects.find(s => String(s.id) === String(selectedSubjectId));
@@ -794,16 +806,14 @@ export default function AdminTimetable() {
                   setAcademicYear(s.academic_year || '2025-2026');
                   setLastAction(null);
                 }}
-                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${
-                  String(selectedSemesterId) === String(s.id)
-                    ? 'bg-orange-500 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
+                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${String(selectedSemesterId) === String(s.id)
+                  ? 'bg-orange-500 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
               >
                 <span>Semester {s.number} (S{s.number})</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
-                  String(selectedSemesterId) === String(s.id) ? 'bg-orange-600 text-orange-100' : 'bg-slate-200 text-slate-600'
-                }`}>
+                <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${String(selectedSemesterId) === String(s.id) ? 'bg-orange-600 text-orange-100' : 'bg-slate-200 text-slate-600'
+                  }`}>
                   {s.class_room}
                 </span>
               </button>
@@ -818,11 +828,10 @@ export default function AdminTimetable() {
             type="button"
             onClick={handleUndo}
             disabled={!lastAction || undoing}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg border transition-all ${
-              lastAction && !undoing
-                ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 hover:border-amber-400 shadow-sm cursor-pointer'
-                : 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed pointer-events-none'
-            }`}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg border transition-all ${lastAction && !undoing
+              ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 hover:border-amber-400 shadow-sm cursor-pointer'
+              : 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed pointer-events-none'
+              }`}
             title={lastAction ? `Undo: ${lastAction.description}` : 'No operations to undo'}
           >
             {undoing ? (
@@ -948,7 +957,7 @@ export default function AdminTimetable() {
               <thead>
                 <tr className="bg-slate-100 text-slate-800 text-xs font-bold uppercase tracking-wider">
                   <th className="border border-slate-300 py-3 px-2 w-28 bg-slate-200">Day / Time</th>
-                  
+
                   {/* Period 1 */}
                   <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
                     <div>Period 1</div>
@@ -1013,115 +1022,90 @@ export default function AdminTimetable() {
 
               {/* Grid Rows for Each Day (Monday - Saturday) */}
               <tbody>
-                {DAYS.map((day) => (
-                  <tr key={day} className="h-20">
-                    {/* Day Name */}
-                    <td className="border border-slate-300 bg-slate-50 font-bold text-slate-900 text-xs px-2 py-3">
-                      {day}
-                    </td>
+                {DAYS.map((day) => {
+                  // ── Lab Block Merge Logic ──────────────────────────────────────
+                  // Detect which consecutive period pairs share the same lab subject.
+                  // Only pairs with no break column between them can merge visually.
+                  const isLabSlot = (p) => {
+                    const es = gridMap.get(`${day}_${p}`) || [];
+                    if (es.length !== 1) return null;
+                    const e = es[0];
+                    return (e.session_type === 'lab' || e.is_lab) ? e : null;
+                  };
+                  const mergeStarts = new Set();
+                  const skipPeriods = new Set();
+                  for (const [p1, p2] of LAB_MERGE_CANDIDATES) {
+                    const e1 = isLabSlot(p1);
+                    const e2 = isLabSlot(p2);
+                    if (e1 && e2 && String(e1.subject_id) === String(e2.subject_id)) {
+                      mergeStarts.add(p1);
+                      skipPeriods.add(p2);
+                    }
+                  }
 
-                    {/* Period 1 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 1)}
-                      onDragOver={(e) => handleDragOver(e, day, 1)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 1)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_1` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_1`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 1)} />
-                    </td>
+                  // Helper to render one period <td> (handles merge start, merge skip, normal)
+                  const renderPeriodTd = (p) => {
+                    if (skipPeriods.has(p)) return null; // consumed by the preceding merged cell
+                    const isMerge = mergeStarts.has(p);
+                    const isDragOver = dragOverKey === `${day}_${p}`;
+                    return (
+                      <td
+                        key={p}
+                        colSpan={isMerge ? 2 : 1}
+                        onClick={() => handleSlotClick(day, p)}
+                        onDragOver={(e) => handleDragOver(e, day, p)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, day, p)}
+                        className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
+                          isDragOver ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
+                        }`}
+                      >
+                        {isMerge ? (
+                          <MergedLabCell
+                            entry={(gridMap.get(`${day}_${p}`) || [])[0]}
+                            timeRange={MERGED_PERIOD_TIMES[`${p}_${p + 1}`] || ''}
+                            onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
+                          />
+                        ) : (
+                          <SlotCell
+                            entries={gridMap.get(`${day}_${p}`)}
+                            onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
+                          />
+                        )}
+                      </td>
+                    );
+                  };
+                  // ── End Lab Block Merge Logic ──────────────────────────────────
 
-                    {/* Period 2 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 2)}
-                      onDragOver={(e) => handleDragOver(e, day, 2)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 2)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_2` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_2`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 2)} />
-                    </td>
+                  return (
+                    <tr key={day} className="h-20">
+                      {/* Day Name */}
+                      <td className="border border-slate-300 bg-slate-50 font-bold text-slate-900 text-xs px-2 py-3">
+                        {day}
+                      </td>
 
-                    {/* Tea Break Cell */}
-                    <td className="border border-slate-300 bg-amber-50/40 text-amber-700 text-[10px] font-medium p-1">
-                      <div className="h-full flex items-center justify-center text-slate-400 font-mono">||</div>
-                    </td>
+                      {renderPeriodTd(1)}
+                      {renderPeriodTd(2)}
 
-                    {/* Period 3 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 3)}
-                      onDragOver={(e) => handleDragOver(e, day, 3)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 3)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_3` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_3`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 3)} />
-                    </td>
+                      {/* Tea Break Cell */}
+                      <td className="border border-slate-300 bg-amber-50/40 text-amber-700 text-[10px] font-medium p-1">
+                        <div className="h-full flex items-center justify-center text-slate-400 font-mono">||</div>
+                      </td>
 
-                    {/* Period 4 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 4)}
-                      onDragOver={(e) => handleDragOver(e, day, 4)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 4)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_4` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_4`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 4)} />
-                    </td>
+                      {renderPeriodTd(3)}
+                      {renderPeriodTd(4)}
 
-                    {/* Lunch Break Cell */}
-                    <td className="border border-slate-300 bg-amber-50/40 text-amber-700 text-[10px] font-medium p-1">
-                      <div className="h-full flex items-center justify-center text-slate-400 font-mono">||</div>
-                    </td>
+                      {/* Lunch Break Cell */}
+                      <td className="border border-slate-300 bg-amber-50/40 text-amber-700 text-[10px] font-medium p-1">
+                        <div className="h-full flex items-center justify-center text-slate-400 font-mono">||</div>
+                      </td>
 
-                    {/* Period 5 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 5)}
-                      onDragOver={(e) => handleDragOver(e, day, 5)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 5)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_5` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_5`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 5)} />
-                    </td>
-
-                    {/* Period 6 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 6)}
-                      onDragOver={(e) => handleDragOver(e, day, 6)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 6)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_6` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_6`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 6)} />
-                    </td>
-
-                    {/* Period 7 */}
-                    <td
-                      onClick={() => handleSlotClick(day, 7)}
-                      onDragOver={(e) => handleDragOver(e, day, 7)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, day, 7)}
-                      className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                        dragOverKey === `${day}_7` ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                      }`}
-                    >
-                      <SlotCell entries={gridMap.get(`${day}_7`)} onDragStart={(e, entry) => handleDragStart(e, entry, day, 7)} />
-                    </td>
-                  </tr>
-                ))}
+                      {renderPeriodTd(5)}
+                      {renderPeriodTd(6)}
+                      {renderPeriodTd(7)}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1219,7 +1203,7 @@ export default function AdminTimetable() {
                   className="flex-1 py-2 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
                   title="Schedule both subjects in parallel"
                 >
-                  ✅ Yes, make parallel
+                  Yes, make parallel
                 </button>
                 <button
                   type="button"
@@ -1227,7 +1211,7 @@ export default function AdminTimetable() {
                   className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1"
                   title={`Replace ${parallelDialog.targetEntries[0]?.subject_code} with ${parallelDialog.drag.subjectCode}`}
                 >
-                  🔄 No, replace {parallelDialog.targetEntries[0]?.subject_code}
+                  No, replace {parallelDialog.targetEntries[0]?.subject_code}
                 </button>
               </div>
               <button
@@ -1266,11 +1250,10 @@ export default function AdminTimetable() {
                         handleSubjectChange(selectedSubjectId, nextState);
                       }
                     }}
-                    className={`text-xs font-semibold px-2 py-1 rounded transition-colors flex items-center gap-1 ${
-                      replaceEntireSlot
-                        ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
-                        : 'text-slate-600 hover:text-slate-900 bg-slate-100'
-                    }`}
+                    className={`text-xs font-semibold px-2 py-1 rounded transition-colors flex items-center gap-1 ${replaceEntireSlot
+                      ? 'bg-amber-100 text-amber-900 border border-amber-300 font-bold'
+                      : 'text-slate-600 hover:text-slate-900 bg-slate-100'
+                      }`}
                   >
                     <span>{replaceEntireSlot ? '✓ Replacing entire slot with 1 class' : '🔄 Replace all occupants with 1 class'}</span>
                   </button>
@@ -1284,11 +1267,10 @@ export default function AdminTimetable() {
                       <button
                         type="button"
                         onClick={() => handleSelectOccupant(idx)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-l-lg border transition-all flex items-center gap-1.5 ${
-                          selectedOccupantIndex === idx
-                            ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-l-lg border transition-all flex items-center gap-1.5 ${selectedOccupantIndex === idx
+                          ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
                       >
                         <span>{entry.subject_code}</span>
                         <span className="text-[10px] font-normal opacity-90">({entry.faculty_name})</span>
@@ -1314,11 +1296,10 @@ export default function AdminTimetable() {
                     <button
                       type="button"
                       onClick={() => handleSelectOccupant('new')}
-                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border border-dashed transition-all flex items-center gap-1 ${
-                        selectedOccupantIndex === 'new'
-                          ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                          : 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100'
-                      }`}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border border-dashed transition-all flex items-center gap-1 ${selectedOccupantIndex === 'new'
+                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                        : 'bg-purple-50 text-purple-700 border-purple-300 hover:bg-purple-100'
+                        }`}
                     >
                       <span>+ Add Parallel Activity (PE/NSS)</span>
                     </button>
@@ -1332,7 +1313,7 @@ export default function AdminTimetable() {
             <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
               {replaceEntireSlot
                 ? 'Select Single Subject to Replace Entire Slot:'
-                : selectedOccupantIndex === 'new' 
+                : selectedOccupantIndex === 'new'
                   ? 'Select 2nd Parallel Subject to Coexist in this Slot:'
                   : `Select Subject (Occupant ${selectedOccupantIndex + 1}):`}
             </label>
@@ -1360,33 +1341,30 @@ export default function AdminTimetable() {
                 <button
                   type="button"
                   onClick={() => setCustomSessionType('theory')}
-                  className={`py-2 px-2.5 text-xs font-semibold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                    customSessionType === 'theory'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`py-2 px-2.5 text-xs font-semibold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${customSessionType === 'theory'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   <span>📘 Theory (1h)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCustomSessionType('lab')}
-                  className={`py-2 px-2.5 text-xs font-semibold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                    customSessionType === 'lab'
-                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`py-2 px-2.5 text-xs font-semibold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${customSessionType === 'lab'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   <span>🔬 Lab / Practical</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCustomSessionType('activity')}
-                  className={`py-2 px-2.5 text-xs font-semibold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                    customSessionType === 'activity'
-                      ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`py-2 px-2.5 text-xs font-semibold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${customSessionType === 'activity'
+                    ? 'bg-teal-600 text-white border-teal-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   <span>⚡ Activity</span>
                 </button>
@@ -1395,8 +1373,8 @@ export default function AdminTimetable() {
                 {customSessionType === 'lab'
                   ? '🔬 Marked as Lab / Practical (e.g. continuous multi-hour practical for subjects sharing the same code).'
                   : customSessionType === 'activity'
-                  ? '⚡ Marked as Activity (Library, Mentoring, Placement, or Parallel).'
-                  : '📘 Marked as standard 1-hour Theory class.'}
+                    ? '⚡ Marked as Activity (Library, Mentoring, Placement, or Parallel).'
+                    : '📘 Marked as standard 1-hour Theory class.'}
               </p>
             </div>
           )}
@@ -1826,11 +1804,45 @@ export default function AdminTimetable() {
 
 // Session type styling config
 const SESSION_STYLES = {
-  theory:   { bg: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-950',   badge: 'bg-blue-200 text-blue-800',   label: null },
-  lab:      { bg: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-950',  badge: 'bg-amber-200 text-amber-800',  label: 'LAB' },
-  block:    { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-950', badge: 'bg-orange-200 text-orange-800', label: 'BLOCK' },
-  activity: { bg: 'bg-teal-50',   border: 'border-teal-200',   text: 'text-teal-950',   badge: 'bg-teal-200 text-teal-800',   label: 'ACT' },
+  theory: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-950', badge: 'bg-blue-200 text-blue-800', label: null },
+  lab: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-950', badge: 'bg-amber-200 text-amber-800', label: 'LAB' },
+  block: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-950', badge: 'bg-orange-200 text-orange-800', label: 'BLOCK' },
+  activity: { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-950', badge: 'bg-teal-200 text-teal-800', label: 'ACT' },
 };
+
+// Merged Lab Cell — rendered when two consecutive periods share the same lab subject.
+// Spans 2 columns (colSpan=2) with a wider layout showing subject code, faculty, time range.
+function MergedLabCell({ entry, timeRange, onDragStart }) {
+  if (!entry) {
+    return (
+      <div className="h-full min-h-[58px] flex items-center justify-center">
+        <span className="text-[11px] font-mono text-slate-300">+ Free</span>
+      </div>
+    );
+  }
+  return (
+    <div
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
+      onClick={(e) => e.stopPropagation()}
+      className="h-full min-h-[58px] px-3 py-2 rounded-md flex items-center justify-between border shadow-xs cursor-grab active:cursor-grabbing active:opacity-60 transition-opacity select-none bg-amber-50 border-amber-300 text-amber-950"
+    >
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className="font-mono font-bold text-xs tracking-tight">{entry.subject_code}</span>
+        {entry.faculty_name && (
+          <span className="text-[10px] text-amber-700 truncate">{entry.faculty_name}</span>
+        )}
+        {timeRange && (
+          <span className="text-[9px] font-mono text-amber-500">{timeRange}</span>
+        )}
+      </div>
+      <div className="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 uppercase">LAB</span>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">2h</span>
+      </div>
+    </div>
+  );
+}
 
 // Compact Slot Renderer — shows subject code + session badge only.
 // Full details (name, faculty) are in the legend table below the grid.

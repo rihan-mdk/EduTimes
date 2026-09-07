@@ -2,7 +2,11 @@
  * Centralized API client for YenSync
  */
 
-const API_BASE = '/api';
+// In production: set VITE_API_URL=https://your-app.railway.app in Vercel env vars
+// In local dev: falls back to '/api' (proxied by Vite to localhost:5000)
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 export async function apiRequest(endpoint, options = {}) {
   const token = localStorage.getItem('yensync_token');
