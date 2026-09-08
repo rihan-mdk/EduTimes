@@ -183,9 +183,11 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   // facultyOccupied: Map<faculty_id, Set<timeslot_id>>
   // semesterOccupied: Map<semester_id, Map<timeslot_id, Array<subject_id>>>
   // subjectDayHours: Map<"semId_subId_day", count>
+  // semesterDayLabs: Map<"semId_day", count> (tracks lab hours scheduled per semester per day)
   const facultyOccupied = new Map();
   const semesterOccupied = new Map();
   const subjectDayHours = new Map();
+  const semesterDayLabs = new Map();
 
   function recordAssignment(entry) {
     const sub = subjectsMap.get(entry.subject_id);
@@ -205,6 +207,11 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     if (ts) {
       const key = `${entry.semester_id}_${entry.subject_id}_${ts.day}`;
       subjectDayHours.set(key, (subjectDayHours.get(key) || 0) + 1);
+
+      if (sub && sub.is_lab) {
+        const labKey = `${entry.semester_id}_${ts.day}`;
+        semesterDayLabs.set(labKey, (semesterDayLabs.get(labKey) || 0) + 1);
+      }
     }
   }
 
@@ -234,6 +241,16 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         subjectDayHours.delete(key);
       } else {
         subjectDayHours.set(key, count - 1);
+      }
+
+      if (sub && sub.is_lab) {
+        const labKey = `${entry.semester_id}_${ts.day}`;
+        const labCount = semesterDayLabs.get(labKey) || 0;
+        if (labCount <= 1) {
+          semesterDayLabs.delete(labKey);
+        } else {
+          semesterDayLabs.set(labKey, labCount - 1);
+        }
       }
     }
   }
@@ -287,6 +304,14 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           continue;
         }
 
+        // Daily lab constraint: at most 1 lab session per day per semester (no two labs in a day)
+        if (demand.is_lab) {
+          const labKey = `${demand.semester_id}_${day}`;
+          if ((semesterDayLabs.get(labKey) || 0) > 0) {
+            continue;
+          }
+        }
+
         // Validate all slots in consecutive window
         let windowValid = true;
         const entriesToPlace = [];
@@ -319,14 +344,20 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
             }
           }
 
-          const isLabSession = Boolean(demand.is_lab || demand.block_hours > 1);
+          let blockSessionType = 'theory';
+          if (candidateSubject?.is_generic_activity || candidateSubject?.is_parallel_activity) {
+            blockSessionType = 'activity';
+          } else if (demand.is_lab) {
+            blockSessionType = 'lab';
+          }
+
           const candidateEntry = {
             subject_id: demand.subject_id,
             semester_id: demand.semester_id,
             timeslot_id: ts.id,
             faculty_id: demand.faculty_id,
             academic_year: demand.academic_year,
-            session_type: isLabSession ? 'lab' : 'theory'
+            session_type: blockSessionType
           };
 
           // 3. Complete clash detection against currently scheduled entries
@@ -407,6 +438,14 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       const maxAllowedPerDay = weeklyHours > 6 ? 2 : (weeklyHours > 4 ? 2 : 1);
       if (!demand.is_lab && currentDayHours >= maxAllowedPerDay) {
         continue;
+      }
+
+      // Daily lab constraint: at most 1 lab session per day per semester (no two labs in a day)
+      if (demand.is_lab) {
+        const labKey = `${demand.semester_id}_${ts.day}`;
+        if ((semesterDayLabs.get(labKey) || 0) > 0) {
+          continue;
+        }
       }
 
       let singleSessionType = 'theory';
