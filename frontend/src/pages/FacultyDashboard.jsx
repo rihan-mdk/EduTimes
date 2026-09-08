@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
 import { useToast } from '../components/Toast';
-import ProfileModal from '../components/ProfileModal';
 import { 
   Calendar as CalendarIcon, 
   Clock, 
@@ -12,7 +11,6 @@ import {
   CheckCircle2, 
   Coffee, 
   Utensils,
-  KeyRound,
   UserCheck
 } from 'lucide-react';
 
@@ -33,7 +31,6 @@ export default function FacultyDashboard() {
 
   const [timetableEntries, setTimetableEntries] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // Current real-time clock & day calculation
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -117,14 +114,6 @@ export default function FacultyDashboard() {
           <div>
             <div className="flex items-center justify-between">
               <div className="text-xs font-semibold text-orange-500 uppercase tracking-wider">Faculty Portal</div>
-              <button
-                onClick={() => setIsProfileOpen(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:text-orange-600 bg-slate-50 hover:bg-orange-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                title="Edit your faculty code, name or password"
-              >
-                <KeyRound className="w-3.5 h-3.5 text-orange-500" />
-                <span>Edit Profile / Password</span>
-              </button>
             </div>
             <h2 className="text-xl font-bold text-slate-900 mt-1">Hello, {user?.name}</h2>
             <div className="flex items-center gap-2 text-xs text-slate-500 mt-2 font-medium">
@@ -358,9 +347,6 @@ export default function FacultyDashboard() {
           </div>
         )}
       </div>
-
-      {/* Profile & Password Modal */}
-      <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
     </div>
   );
 }

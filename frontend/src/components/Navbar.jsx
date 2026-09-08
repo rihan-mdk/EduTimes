@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Calendar, Database, User, Building2, KeyRound } from 'lucide-react';
+import { LogOut, Calendar, Database, User, Building2 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 
 export default function Navbar({ activeTab, setActiveTab }) {
@@ -88,15 +88,6 @@ export default function Navbar({ activeTab, setActiveTab }) {
               <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-orange-100 border border-slate-200 group-hover:border-orange-300 flex items-center justify-center text-slate-600 group-hover:text-orange-600 transition-all">
                 <User className="w-4 h-4" />
               </div>
-            </button>
-
-            <button
-              onClick={() => setIsProfileOpen(true)}
-              title="Change Password & Profile"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-orange-600 hover:bg-orange-50 border border-slate-200 rounded-lg transition-colors"
-            >
-              <KeyRound className="w-3.5 h-3.5 text-orange-500" />
-              <span className="hidden lg:inline">Profile & Security</span>
             </button>
 
             <button
