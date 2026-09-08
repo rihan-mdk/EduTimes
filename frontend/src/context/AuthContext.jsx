@@ -69,6 +69,26 @@ export function AuthProvider({ children }) {
     return res.user;
   };
 
+  const updateUser = (updatedUser, updatedToken) => {
+    if (updatedUser) {
+      setUser(updatedUser);
+      localStorage.setItem('yensync_user', JSON.stringify(updatedUser));
+      if (updatedUser.department_id) {
+        const deptObj = {
+          id: updatedUser.department_id,
+          name: updatedUser.department_name,
+          code: updatedUser.department_code
+        };
+        setActiveDepartment(deptObj);
+        localStorage.setItem('yensync_active_department', JSON.stringify(deptObj));
+      }
+    }
+    if (updatedToken) {
+      setToken(updatedToken);
+      localStorage.setItem('yensync_token', updatedToken);
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -86,6 +106,7 @@ export function AuthProvider({ children }) {
       activeDepartment,
       login,
       logout,
+      updateUser,
       loading,
       isAuthenticated: !!token
     }}>

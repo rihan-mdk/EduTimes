@@ -59,6 +59,7 @@ export const api = {
   setupDepartment: (data) =>
     apiRequest('/auth/setup-department', { method: 'POST', body: data }),
   getMe: () => apiRequest('/auth/me'),
+  updateProfile: (data) => apiRequest('/auth/profile', { method: 'PUT', body: data }),
 
   // Departments
   getPublicDepartments: () => apiRequest('/departments/public').catch(() => apiRequest('/departments')),

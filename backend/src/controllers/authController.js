@@ -203,9 +203,97 @@ async function getMe(req, res) {
   }
 }
 
+async function updateProfile(req, res) {
+  try {
+    const userId = req.user.id;
+    const { name, faculty_code, current_password, new_password } = req.body;
+
+    // 1. Fetch current faculty record
+    const userQuery = `
+      SELECT f.id, f.faculty_code, f.name, f.password_hash, f.role, f.department_id,
+             d.name as department_name, d.code as department_code
+      FROM faculty f
+      LEFT JOIN department d ON f.department_id = d.id
+      WHERE f.id = $1
+    `;
+    const userResult = await db.query(userQuery, [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    const currentUser = userResult.rows[0];
+
+    // 2. If password update requested, verify current password
+    let updatedPasswordHash = currentUser.password_hash;
+    if (new_password) {
+      if (!current_password) {
+        return res.status(400).json({ error: 'Current password is required to set a new password.' });
+      }
+      if (new_password.length < 4) {
+        return res.status(400).json({ error: 'New password must be at least 4 characters long.' });
+      }
+      const isMatch = await bcrypt.compare(current_password, currentUser.password_hash);
+      if (!isMatch) {
+        return res.status(400).json({ error: 'Incorrect current password.' });
+      }
+      const salt = await bcrypt.genSalt(10);
+      updatedPasswordHash = await bcrypt.hash(new_password, salt);
+    }
+
+    // 3. If faculty_code is being changed, check uniqueness
+    let updatedFacultyCode = currentUser.faculty_code;
+    if (faculty_code && faculty_code.trim()) {
+      const trimmedCode = faculty_code.trim();
+      if (trimmedCode.toLowerCase() !== currentUser.faculty_code.toLowerCase()) {
+        const codeCheck = await db.query(
+          `SELECT id FROM faculty WHERE LOWER(faculty_code) = LOWER($1) AND id != $2`,
+          [trimmedCode, userId]
+        );
+        if (codeCheck.rows.length > 0) {
+          return res.status(400).json({ error: `Faculty code "${trimmedCode}" is already in use by another faculty member.` });
+        }
+        updatedFacultyCode = trimmedCode;
+      }
+    }
+
+    // 4. If name changed
+    const updatedName = name && name.trim() ? name.trim() : currentUser.name;
+
+    // 5. Update database record
+    await db.query(
+      `UPDATE faculty 
+       SET faculty_code = $1, name = $2, password_hash = $3 
+       WHERE id = $4`,
+      [updatedFacultyCode, updatedName, updatedPasswordHash, userId]
+    );
+
+    // 6. Sign fresh JWT payload
+    const payload = {
+      id: currentUser.id,
+      faculty_code: updatedFacultyCode,
+      name: updatedName,
+      role: currentUser.role,
+      department_id: currentUser.department_id,
+      department_name: currentUser.department_name,
+      department_code: currentUser.department_code || ''
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+    return res.json({
+      message: 'Profile updated successfully!',
+      user: payload,
+      token
+    });
+  } catch (error) {
+    console.error('[Auth] updateProfile error:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error while updating profile.' });
+  }
+}
+
 module.exports = {
   checkDepartment,
   setupDepartment,
   login,
-  getMe
+  getMe,
+  updateProfile
 };

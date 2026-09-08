@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Calendar, Database, User, Building2 } from 'lucide-react';
+import { LogOut, Calendar, Database, User, Building2, KeyRound } from 'lucide-react';
+import ProfileModal from './ProfileModal';
 
 export default function Navbar({ activeTab, setActiveTab }) {
   const { user, logout, activeDepartment } = useAuth();
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
@@ -62,23 +64,40 @@ export default function Navbar({ activeTab, setActiveTab }) {
             )}
           </div>
 
-          {/* User info & Logout */}
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2.5 text-right">
+          {/* User info, Settings & Logout */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              onClick={() => setIsProfileOpen(true)}
+              title="Edit Profile & Password"
+              className="flex items-center gap-2.5 text-right p-1.5 rounded-lg hover:bg-slate-100 transition-colors group cursor-pointer"
+            >
               <div className="hidden sm:block">
-                <div className="text-sm font-semibold text-slate-900 leading-none">{user?.name}</div>
+                <div className="text-sm font-semibold text-slate-900 leading-none group-hover:text-orange-600 transition-colors">
+                  {user?.name}
+                </div>
                 <div className="text-xs text-slate-600 mt-1 flex items-center justify-end gap-1.5">
-                  <span className="font-mono text-slate-600">{user?.faculty_code}</span>
+                  <span className="font-mono text-slate-600 group-hover:text-orange-600 transition-colors font-medium">
+                    {user?.faculty_code}
+                  </span>
                   <span className="text-slate-300">•</span>
                   <span className={`capitalize font-medium ${user?.role === 'admin' ? 'text-purple-600' : 'text-orange-500'}`}>
                     {user?.role}
                   </span>
                 </div>
               </div>
-              <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-600">
+              <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-orange-100 border border-slate-200 group-hover:border-orange-300 flex items-center justify-center text-slate-600 group-hover:text-orange-600 transition-all">
                 <User className="w-4 h-4" />
               </div>
-            </div>
+            </button>
+
+            <button
+              onClick={() => setIsProfileOpen(true)}
+              title="Change Password & Profile"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-orange-600 hover:bg-orange-50 border border-slate-200 rounded-lg transition-colors"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-orange-500" />
+              <span className="hidden lg:inline">Profile & Security</span>
+            </button>
 
             <button
               onClick={logout}
@@ -90,6 +109,9 @@ export default function Navbar({ activeTab, setActiveTab }) {
             </button>
           </div>
         </div>
+
+        {/* Profile & Password Modal */}
+        <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} />
 
         {/* Mobile Tab Bar */}
         {user?.role === 'admin' && (
