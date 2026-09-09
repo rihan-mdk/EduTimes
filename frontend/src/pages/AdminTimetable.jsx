@@ -19,8 +19,6 @@ import {
   Building2,
   RotateCcw,
   Pencil,
-  BookOpen,
-  Users,
   Layers
 } from 'lucide-react';
 
@@ -116,7 +114,6 @@ export default function AdminTimetable() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [overviewTab, setOverviewTab] = useState('subjects'); // 'subjects' | 'faculty'
 
   // Manual Edit State (Slot click)
   const [selectedSlot, setSelectedSlot] = useState(null); // { day, period_number, timeslot_id, existingEntries }
@@ -215,29 +212,6 @@ export default function AdminTimetable() {
 
   const currentSemester = semesters.find(s => String(s.id) === String(selectedSemesterId));
   const semesterSubjects = subjects.filter(s => String(s.semester_id) === String(selectedSemesterId));
-
-  // Unique faculty teaching in the currently selected semester
-  const semesterFacultyList = React.useMemo(() => {
-    const facMap = new Map();
-    semesterSubjects.forEach(sub => {
-      if (sub.faculty_id) {
-        if (!facMap.has(sub.faculty_id)) {
-          facMap.set(sub.faculty_id, {
-            id: sub.faculty_id,
-            name: sub.faculty_name,
-            faculty_code: sub.faculty_code,
-            subjects: [sub],
-            totalHours: Number(sub.weekly_hours) || 0
-          });
-        } else {
-          const item = facMap.get(sub.faculty_id);
-          item.subjects.push(sub);
-          item.totalHours += (Number(sub.weekly_hours) || 0);
-        }
-      }
-    });
-    return Array.from(facMap.values());
-  }, [semesterSubjects]);
 
   // Build Grid Map: Key `day_period` -> Array of entries (supports parallel activities)
   const gridMap = new Map();
@@ -1217,213 +1191,6 @@ export default function AdminTimetable() {
         </div>
       </div>
 
-      {/* ── Semester Overview: Subjects & Faculty Directory (Separated View) ── */}
-      {currentSemester && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
-          {/* Header with Sub-tabs */}
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-            <div className="flex items-center gap-2.5">
-              <span className="w-8 h-8 rounded-lg bg-orange-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
-                S{currentSemester.number}
-              </span>
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Semester {currentSemester.number} Directory: Subjects & Faculty Allocation
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Clear visual allocation of subjects and teaching staff for {activeDepartment?.name || 'Department'}
-                </p>
-              </div>
-            </div>
-
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setOverviewTab('subjects')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                  overviewTab === 'subjects'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" />
-                <span>Subjects ({semesterSubjects.length})</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOverviewTab('faculty')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
-                  overviewTab === 'faculty'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Faculty ({semesterFacultyList.length})</span>
-              </button>
-            </div>
-          </div>
-
-          {/* TAB 1: SUBJECTS DIRECTORY */}
-          {overviewTab === 'subjects' && (
-            <div className="space-y-3">
-              {semesterSubjects.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  No subjects configured for Semester {currentSemester.number} yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {semesterSubjects.map((sub) => {
-                    const scheduledCount = timetableEntries.filter(e => String(e.subject_id) === String(sub.id)).length;
-                    const requiredHours = Number(sub.weekly_hours) || 0;
-                    const isFullyScheduled = scheduledCount >= requiredHours && requiredHours > 0;
-
-                    return (
-                      <div
-                        key={sub.id}
-                        className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3.5 flex flex-col justify-between gap-3 hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono font-bold text-sm text-slate-900">
-                              {sub.subject_code}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
-                              sub.is_lab ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              {sub.is_lab ? 'Lab' : 'Theory'}
-                            </span>
-                          </div>
-
-                          <p className="text-xs font-medium text-slate-700 line-clamp-2" title={sub.name}>
-                            {sub.name}
-                          </p>
-
-                          <div className="flex items-center gap-1.5 text-xs text-slate-600 pt-1 border-t border-slate-200/60">
-                            <span className="text-slate-400">Faculty:</span>
-                            {sub.faculty_name ? (
-                              <span className="font-semibold text-slate-800">
-                                {sub.faculty_name} <span className="font-mono text-[10px] text-slate-500">({sub.faculty_code})</span>
-                              </span>
-                            ) : (
-                              <span className="text-amber-600 italic">Unassigned</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Progress Bar for Hours Scheduled */}
-                        <div className="space-y-1 pt-1 border-t border-slate-200/60">
-                          <div className="flex items-center justify-between text-[11px]">
-                            <span className="text-slate-500">Schedule Status</span>
-                            <span className={`font-semibold font-mono ${
-                              isFullyScheduled ? 'text-emerald-700' : scheduledCount > 0 ? 'text-orange-600' : 'text-slate-500'
-                            }`}>
-                              {scheduledCount} / {requiredHours} hrs
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-300 ${
-                                isFullyScheduled ? 'bg-emerald-500' : scheduledCount > 0 ? 'bg-orange-500' : 'bg-slate-300'
-                              }`}
-                              style={{
-                                width: requiredHours > 0 ? `${Math.min(100, (scheduledCount / requiredHours) * 100)}%` : '0%'
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: FACULTY DIRECTORY & MULTI-SEMESTER ALLOCATION */}
-          {overviewTab === 'faculty' && (
-            <div className="space-y-3">
-              {semesterFacultyList.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-500">
-                  No faculty assigned to Semester {currentSemester.number} subjects yet.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {semesterFacultyList.map((item) => {
-                    // Check if this faculty teaches in other semesters
-                    const otherSemSubs = subjects.filter(
-                      s => s.faculty_id === item.id && String(s.semester_id) !== String(selectedSemesterId)
-                    );
-                    const otherSemNumbers = Array.from(
-                      new Set(otherSemSubs.map(s => s.semester_number || s.semester_id))
-                    ).sort((a, b) => Number(a) - Number(b));
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="bg-slate-50/60 border border-slate-200/80 rounded-xl p-3.5 flex flex-col justify-between gap-3 hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <h4 className="font-bold text-slate-900 text-sm">{item.name}</h4>
-                              <span className="font-mono text-xs text-slate-500">{item.faculty_code}</span>
-                            </div>
-                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-200 text-slate-800 font-mono">
-                              {item.totalHours} hrs/wk in S{currentSemester.number}
-                            </span>
-                          </div>
-
-                          {/* Subjects taught in this semester */}
-                          <div className="space-y-1">
-                            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                              Assigned in S{currentSemester.number}:
-                            </span>
-                            <div className="flex flex-wrap gap-1">
-                              {item.subjects.map((s) => (
-                                <span
-                                  key={s.id}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-white border border-slate-200 text-slate-800 shadow-xs"
-                                >
-                                  <strong className="font-mono text-orange-700">{s.subject_code}</strong>
-                                  <span className="text-slate-500 text-[10px]">({s.weekly_hours}h)</span>
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Multi-semester tag */}
-                        <div className="pt-2 border-t border-slate-200/60">
-                          {otherSemNumbers.length > 0 ? (
-                            <div className="flex items-center gap-1.5 text-xs text-purple-800 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
-                              <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse shrink-0" />
-                              <span className="font-semibold">Also in:</span>
-                              <span className="font-mono font-bold">
-                                {otherSemNumbers.map(n => `S${n}`).join(', ')}
-                              </span>
-                              <span className="text-purple-600 text-[10px] truncate">
-                                ({otherSemSubs.map(s => s.subject_code).join(', ')})
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400 italic">
-                              Teaching only in Semester {currentSemester.number}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Moving slot spinner overlay */}
       {movingSlot && (
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
@@ -1809,94 +1576,103 @@ export default function AdminTimetable() {
           top: 0,
           width: '1120px',
           backgroundColor: '#ffffff',
-          color: '#000000',
+          color: '#0f172a',
+          fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif",
         }}
-        className="p-6 font-sans bg-white text-black border-2 border-black box-border"
+        className="p-6 bg-white text-slate-900 border-2 border-slate-900 box-border"
       >
         {/* 1. Official Header */}
-        <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-2">
-          <div className="w-24 text-center">
-            <div className="border-2 border-black px-2 py-0.5 font-serif font-black text-sm tracking-tighter inline-block">
+        <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2 mb-2">
+          <div className="w-28 text-center flex flex-col items-center">
+            <div className="border-2 border-slate-900 px-3 py-1 font-serif font-black text-sm tracking-wider inline-block">
               YIT
             </div>
-            <div className="text-[8px] font-bold tracking-wider font-mono text-slate-800">YENEPOYA</div>
+            <span className="text-[7.5px] font-extrabold tracking-widest text-slate-700 mt-0.5">YENEPOYA</span>
           </div>
-          <div className="flex-1 text-center">
-            <h1 className="text-lg font-black tracking-wide uppercase font-serif text-black leading-tight">
-              YENEPOYA INSTITUTE OF TECHNOLOGY
+          <div className="flex-1 text-center px-4">
+            <h1 className="text-[17px] font-black tracking-wide uppercase font-serif text-slate-900 leading-tight">
+              Yenepoya Institute of Technology
             </h1>
-            <p className="text-[10px] text-slate-800 font-semibold tracking-wide">
-              NH-13, Thodar, Moodbidri - 574225
+            <p className="text-[9.5px] text-slate-600 font-medium tracking-normal mt-0.5">
+              NH-13, Thodar, Moodbidri, Mangalore, Karnataka - 574225
             </p>
-            <p className="text-xs font-bold text-black mt-0.5">
+            <p className="text-[11.5px] font-bold text-slate-800 mt-0.5">
               Department of {activeDepartment?.name || 'Computer Science and Engineering'}
             </p>
-            <p className="text-xs font-extrabold uppercase tracking-wider text-black mt-0.5">
-              TIME TABLE - {((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN'} SEMESTER (AY {academicYear})
-            </p>
+            <div className="inline-block bg-slate-100 border border-slate-300 rounded px-2.5 py-0.5 mt-1">
+              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-900">
+                Class Time Table • {((currentSemester?.number || 1) % 2 === 1) ? 'Odd' : 'Even'} Semester (AY {academicYear})
+              </span>
+            </div>
           </div>
-          <div className="w-24 text-right text-[10px] font-mono text-slate-800">
+          <div className="w-28 text-right flex flex-col items-end">
             {activeDepartment?.code && (
-              <span className="border border-black px-1.5 py-0.5 font-bold uppercase">{activeDepartment.code}</span>
+              <span className="border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase">
+                DEPT: {activeDepartment.code}
+              </span>
             )}
+            <span className="text-[8px] font-mono text-slate-500 mt-1">Single Page Official</span>
           </div>
         </div>
 
         {/* 2. Metadata Sub-Header */}
-        <div className="grid grid-cols-3 border border-black text-[11px] font-bold uppercase mb-2 text-center py-1 bg-slate-50">
-          <div className="border-r border-black px-2">
-            CLASS: {(() => {
+        <div className="grid grid-cols-3 border border-slate-800 text-[10.5px] font-bold uppercase mb-2 text-center py-1 bg-slate-100/70">
+          <div className="border-r border-slate-800 px-2 flex items-center justify-center gap-1">
+            <span className="text-slate-500 font-medium">Class:</span>
+            <span>{(() => {
               const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
               const r = currentSemester ? ROMAN[currentSemester.number] : null;
-              return r ? `${r} SEMESTER` : `SEMESTER ${currentSemester?.number || ''}`;
-            })()}
+              return r ? `${r} Semester` : `Semester ${currentSemester?.number || ''}`;
+            })()}</span>
           </div>
-          <div className="border-r border-black px-2">
-            CLASS ROOM: {currentSemester?.class_room || 'LLH-01'}
+          <div className="border-r border-slate-800 px-2 flex items-center justify-center gap-1">
+            <span className="text-slate-500 font-medium">Class Room:</span>
+            <span>{currentSemester?.class_room || 'LLH-01'}</span>
           </div>
-          <div className="px-2">
-            W.E.F: {currentSemester?.academic_year || academicYear}
+          <div className="px-2 flex items-center justify-center gap-1">
+            <span className="text-slate-500 font-medium">W.E.F:</span>
+            <span>{currentSemester?.academic_year || academicYear}</span>
           </div>
         </div>
 
         {/* 3. Timetable Grid */}
-        <table className="w-full border-collapse border border-black text-center text-xs mb-3 table-fixed">
+        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2.5 table-fixed">
           <thead>
-            <tr className="bg-slate-100 text-black font-bold text-[10px] uppercase">
-              <th className="border border-black py-1.5 px-1 w-24">Day \ Time</th>
-              <th className="border border-black py-1 px-1">
+            <tr className="bg-slate-100 text-slate-900 font-bold text-[9.5px] uppercase">
+              <th className="border border-slate-800 py-1.5 px-1 w-[82px]">Day \ Time</th>
+              <th className="border border-slate-800 py-1 px-1">
                 <div>09:00AM - 09:55AM</div>
-                <div className="text-[9px] font-normal font-mono">Period 1</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 1</div>
               </th>
-              <th className="border border-black py-1 px-1">
+              <th className="border border-slate-800 py-1 px-1">
                 <div>09:55AM - 10:50AM</div>
-                <div className="text-[9px] font-normal font-mono">Period 2</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 2</div>
               </th>
-              <th className="border border-black py-1 px-0.5 w-7 text-[8px] bg-slate-100">
+              <th className="border border-slate-800 py-1 px-0.5 w-[28px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
                 TEA
               </th>
-              <th className="border border-black py-1 px-1">
+              <th className="border border-slate-800 py-1 px-1">
                 <div>11:10AM - 12:05PM</div>
-                <div className="text-[9px] font-normal font-mono">Period 3</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 3</div>
               </th>
-              <th className="border border-black py-1 px-1">
+              <th className="border border-slate-800 py-1 px-1">
                 <div>12:05PM - 01:00PM</div>
-                <div className="text-[9px] font-normal font-mono">Period 4</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 4</div>
               </th>
-              <th className="border border-black py-1 px-0.5 w-7 text-[8px] bg-slate-100">
+              <th className="border border-slate-800 py-1 px-0.5 w-[28px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
                 LUNCH
               </th>
-              <th className="border border-black py-1 px-1">
+              <th className="border border-slate-800 py-1 px-1">
                 <div>01:50PM - 02:40PM</div>
-                <div className="text-[9px] font-normal font-mono">Period 5</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 5</div>
               </th>
-              <th className="border border-black py-1 px-1">
+              <th className="border border-slate-800 py-1 px-1">
                 <div>02:40PM - 03:30PM</div>
-                <div className="text-[9px] font-normal font-mono">Period 6</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 6</div>
               </th>
-              <th className="border border-black py-1 px-1">
+              <th className="border border-slate-800 py-1 px-1">
                 <div>03:30PM - 04:15PM</div>
-                <div className="text-[9px] font-normal font-mono">Period 7</div>
+                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 7</div>
               </th>
             </tr>
           </thead>
@@ -1911,23 +1687,25 @@ export default function AdminTimetable() {
               const { mergeMap, skipPeriods } = computeLabMerges(isLabSlot);
 
               const renderPrintCell = (items) => {
-                if (!items || items.length === 0) return <span className="text-slate-300 font-mono text-[9px]">—</span>;
+                if (!items || items.length === 0) return <span className="text-slate-300 font-mono text-[10px]">—</span>;
                 if (items.length === 1) {
                   const it = items[0];
                   return (
-                    <div className="font-mono font-bold text-[11px] text-black leading-tight">
-                      <span>{it.subject_code}</span>
-                      {(it.is_lab || it.session_type === 'lab') && (
-                        <span className="block text-[8px] font-sans font-semibold text-slate-600">(LAB)</span>
-                      )}
+                    <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
+                      <span className="font-mono font-bold text-[11px] text-slate-900 tracking-tight">{it.subject_code}</span>
+                      {(it.is_lab || it.session_type === 'lab') ? (
+                        <span className="text-[7.5px] font-sans font-bold text-amber-900 bg-amber-200/80 px-1 py-0.2 rounded mt-0.5">LAB</span>
+                      ) : it.session_type === 'activity' ? (
+                        <span className="text-[7.5px] font-sans font-bold text-teal-900 bg-teal-200/80 px-1 py-0.2 rounded mt-0.5">ACT</span>
+                      ) : null}
                     </div>
                   );
                 }
                 return (
-                  <div className="flex flex-col justify-center gap-0.5 text-[9px] leading-tight">
+                  <div className="h-full flex flex-col items-center justify-center gap-0.5 py-0.5 leading-tight">
                     {items.map((it, idx) => (
-                      <div key={idx} className={idx > 0 ? "border-t border-slate-400 pt-0.5" : ""}>
-                        <span className="font-mono font-bold">{it.subject_code}</span>
+                      <div key={idx} className={idx > 0 ? "border-t border-slate-300 pt-0.5 w-full text-center" : ""}>
+                        <span className="font-mono font-bold text-[10px] text-slate-900">{it.subject_code}</span>
                       </div>
                     ))}
                   </div>
@@ -1941,26 +1719,26 @@ export default function AdminTimetable() {
                 if (mergeInfo) {
                   const entry = items[0];
                   return (
-                    <td key={p} colSpan={mergeInfo.span} className="border border-black p-1 bg-amber-50/40 text-center">
-                      <div className="font-mono font-bold text-[11px] text-black leading-tight">
-                        <span>{entry?.subject_code}</span>
-                        <span className="block text-[8px] font-sans font-semibold text-amber-800">
-                          LAB ({mergeInfo.span}h • {mergeInfo.timeRange})
+                    <td key={p} colSpan={mergeInfo.span} className="border border-slate-800 p-1 bg-amber-50/70 text-center align-middle">
+                      <div className="h-full flex flex-col items-center justify-center leading-tight">
+                        <span className="font-mono font-bold text-xs text-amber-950 tracking-tight">{entry?.subject_code}</span>
+                        <span className="text-[8px] font-sans font-bold text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded-full mt-0.5 uppercase tracking-wide">
+                          LAB • {mergeInfo.span}h ({mergeInfo.timeRange})
                         </span>
                       </div>
                     </td>
                   );
                 }
                 return (
-                  <td key={p} className="border border-black p-1">
+                  <td key={p} className="border border-slate-800 p-1 align-middle">
                     {renderPrintCell(items)}
                   </td>
                 );
               };
 
               return (
-                <tr key={day} className="h-10">
-                  <td className="border border-black bg-slate-50 font-bold text-black text-[11px] uppercase tracking-wider py-1 px-1">
+                <tr key={day} className="h-11">
+                  <td className="border border-slate-800 bg-slate-100/60 font-bold text-slate-900 text-[10.5px] uppercase tracking-wider py-1 px-1 align-middle">
                     {day}
                   </td>
 
@@ -1970,12 +1748,12 @@ export default function AdminTimetable() {
 
                   {/* Tea Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-black bg-slate-50 text-center py-2 px-0.5 w-7">
-                      <div className="flex flex-col items-center justify-center font-bold text-[8px] tracking-widest text-slate-800 leading-tight">
+                    <td rowSpan={6} className="border border-slate-800 bg-amber-50/40 text-center py-2 px-0.5 w-[28px] align-middle">
+                      <div className="flex flex-col items-center justify-center font-extrabold text-[8px] tracking-widest text-amber-950 leading-tight">
                         <span>T</span>
                         <span>E</span>
                         <span>A</span>
-                        <span className="my-1 text-[6px]">•</span>
+                        <span className="my-1 text-[6px] text-amber-700">•</span>
                         <span>B</span>
                         <span>R</span>
                         <span>E</span>
@@ -1991,14 +1769,14 @@ export default function AdminTimetable() {
 
                   {/* Lunch Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-black bg-slate-50 text-center py-2 px-0.5 w-7">
-                      <div className="flex flex-col items-center justify-center font-bold text-[8px] tracking-widest text-slate-800 leading-tight">
+                    <td rowSpan={6} className="border border-slate-800 bg-amber-50/40 text-center py-2 px-0.5 w-[28px] align-middle">
+                      <div className="flex flex-col items-center justify-center font-extrabold text-[8px] tracking-widest text-amber-950 leading-tight">
                         <span>L</span>
                         <span>U</span>
                         <span>N</span>
                         <span>C</span>
                         <span>H</span>
-                        <span className="my-1 text-[6px]">•</span>
+                        <span className="my-1 text-[6px] text-amber-700">•</span>
                         <span>B</span>
                         <span>R</span>
                         <span>E</span>
@@ -2033,36 +1811,36 @@ export default function AdminTimetable() {
           const mentors = currentSemester?.mentors || '—';
 
           return (
-            <div className="border border-black mb-3 text-xs">
+            <div className="border border-slate-800 mb-2.5 text-xs">
               <table className="w-full border-collapse text-left">
                 <thead>
-                  <tr className="bg-slate-100 text-black font-bold text-[10px] uppercase border-b border-black">
-                    <th className="border-r border-black px-2 py-1 w-32">Subject Code</th>
-                    <th className="border-r border-black px-2 py-1">Subject</th>
-                    <th className="px-2 py-1 w-72">Faculty</th>
+                  <tr className="bg-slate-100 text-slate-900 font-bold text-[9.5px] uppercase border-b border-slate-800">
+                    <th className="border-r border-slate-800 px-3 py-1 w-32 font-mono">Subject Code</th>
+                    <th className="border-r border-slate-800 px-3 py-1">Subject Title</th>
+                    <th className="px-3 py-1 w-72">Faculty In-Charge</th>
                   </tr>
                 </thead>
                 <tbody>
                   {printLegend.map((it, idx) => (
-                    <tr key={it.subject_code || idx} className="border-b border-slate-300 text-[10px]">
-                      <td className="border-r border-black px-2 py-0.5 font-mono font-bold text-black">
+                    <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[10px]">
+                      <td className="border-r border-slate-800 px-3 py-0.5 font-mono font-bold text-slate-900">
                         {it.subject_code}
                       </td>
-                      <td className="border-r border-black px-2 py-0.5 text-slate-800">
+                      <td className="border-r border-slate-800 px-3 py-0.5 text-slate-800 font-medium">
                         {it.subject_name}
                       </td>
-                      <td className="px-2 py-0.5 text-slate-800">
+                      <td className="px-3 py-0.5 text-slate-800 font-medium">
                         {it.faculty_name || '—'}
                       </td>
                     </tr>
                   ))}
                   {/* Advisor and Mentors footer row */}
-                  <tr className="bg-slate-50 font-semibold text-[10px] text-black">
-                    <td colSpan={2} className="border-r border-black px-2 py-1">
-                      <strong>Class Advisor:</strong> {advisor}
+                  <tr className="bg-slate-100/70 border-t border-slate-800 font-semibold text-[10px] text-slate-900">
+                    <td colSpan={2} className="border-r border-slate-800 px-3 py-1">
+                      <strong className="text-slate-900 font-bold">Class Advisor:</strong> <span className="text-slate-800 font-medium">{advisor}</span>
                     </td>
-                    <td className="px-2 py-1">
-                      <strong>Mentors:</strong> {mentors}
+                    <td className="px-3 py-1">
+                      <strong className="text-slate-900 font-bold">Mentors:</strong> <span className="text-slate-800 font-medium">{mentors}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -2072,24 +1850,24 @@ export default function AdminTimetable() {
         })()}
 
         {/* 5. Signatures Footer */}
-        <div className="grid grid-cols-3 text-center text-xs font-bold pt-4 mt-2">
+        <div className="grid grid-cols-3 text-center text-xs font-bold pt-3 mt-1">
           <div>
-            <div className="h-5" />
-            <div className="border-t border-black pt-1 inline-block min-w-[170px]">
+            <div className="h-6" />
+            <div className="border-t border-slate-800 pt-1 inline-block min-w-[170px] text-slate-900">
               Time Table Coordinator
             </div>
           </div>
           <div>
-            <div className="h-5" />
-            <div className="border-t border-black pt-1 inline-block min-w-[170px]">
+            <div className="h-6" />
+            <div className="border-t border-slate-800 pt-1 inline-block min-w-[170px] text-slate-900">
               Head of the Department
             </div>
           </div>
           <div>
-            <div className="h-5" />
-            <div className="border-t border-black pt-1 inline-block min-w-[170px]">
+            <div className="h-6" />
+            <div className="border-t border-slate-800 pt-1 inline-block min-w-[170px] text-slate-900">
               <div>Principal</div>
-              <div className="text-[7px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
+              <div className="text-[7.5px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
                 Yenepoya Institute of Technology<br />
                 N.H.13, Thodar, Moodbidri - 574225
               </div>
