@@ -17,7 +17,9 @@ import {
   Layers,
   Filter,
   UserCheck,
-  Sparkles
+  Sparkles,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export default function AdminMasterData() {
@@ -43,6 +45,9 @@ export default function AdminMasterData() {
 
   // Cross-dept faculty conflict state: null | { id, name, department_name, department_code }
   const [conflictFaculty, setConflictFaculty] = useState(null);
+
+  // Show/hide password toggle for faculty form
+  const [showFacultyPassword, setShowFacultyPassword] = useState(false);
 
   // Delete Confirmation modal
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -1184,14 +1189,23 @@ export default function AdminMasterData() {
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                       Password {editingItem && <span className="text-xs text-slate-400 font-normal">(Leave blank to keep current)</span>}
                     </label>
-                    <input
-                      type="password"
-                      required={!editingItem}
-                      value={formData.password || ''}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="••••••••"
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showFacultyPassword ? 'text' : 'password'}
+                        required={!editingItem}
+                        value={formData.password || ''}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        placeholder="••••••••"
+                        className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowFacultyPassword(!showFacultyPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showFacultyPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

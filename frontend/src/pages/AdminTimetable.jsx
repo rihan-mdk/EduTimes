@@ -38,17 +38,67 @@ const PERIOD_TIMES = {
   7: '15:30 - 16:15',
 };
 
-// Lab block merge: pairs of adjacent periods with NO break column between them.
-// (2→3) and (4→5) are invalid — a Tea/Lunch break column sits between them in the HTML table.
-const LAB_MERGE_CANDIDATES = [[1, 2], [3, 4], [5, 6], [6, 7]];
-
-// Merged time display for 2-hour lab blocks
+// Merged time display for 2-hour and 3-hour continuous lab blocks
 const MERGED_PERIOD_TIMES = {
   '1_2': '09:00 - 10:50',
   '3_4': '11:10 - 13:00',
   '5_6': '13:50 - 15:30',
   '6_7': '14:40 - 16:15',
+  '5_7': '13:50 - 16:15',
 };
+
+// Segments within a day separated by break columns: [1, 2], [3, 4], [5, 6, 7]
+// Detects 2-hour or 3-hour continuous lab sessions strictly within each segment.
+function computeLabMerges(getLabEntryAt) {
+  const mergeMap = new Map();
+  const skipPeriods = new Set();
+
+  const sameLab = (e1, e2) => {
+    if (!e1 || !e2) return false;
+    const id1 = e1.subject_id || e1.id;
+    const id2 = e2.subject_id || e2.id;
+    if (id1 && id2 && String(id1) === String(id2)) return true;
+    return Boolean(e1.subject_code && e1.subject_code === e2.subject_code);
+  };
+
+  // Segment 1: [1, 2]
+  const e1 = getLabEntryAt(1);
+  const e2 = getLabEntryAt(2);
+  if (sameLab(e1, e2)) {
+    mergeMap.set(1, { span: 2, timeRange: MERGED_PERIOD_TIMES['1_2'] });
+    skipPeriods.add(2);
+  }
+
+  // Segment 2: [3, 4]
+  const e3 = getLabEntryAt(3);
+  const e4 = getLabEntryAt(4);
+  if (sameLab(e3, e4)) {
+    mergeMap.set(3, { span: 2, timeRange: MERGED_PERIOD_TIMES['3_4'] });
+    skipPeriods.add(4);
+  }
+
+  // Segment 3: [5, 6, 7]
+  const e5 = getLabEntryAt(5);
+  const e6 = getLabEntryAt(6);
+  const e7 = getLabEntryAt(7);
+
+  if (sameLab(e5, e6) && sameLab(e6, e7)) {
+    // 3-hour continuous lab
+    mergeMap.set(5, { span: 3, timeRange: MERGED_PERIOD_TIMES['5_7'] });
+    skipPeriods.add(6);
+    skipPeriods.add(7);
+  } else if (sameLab(e5, e6)) {
+    // 2-hour lab across 5-6
+    mergeMap.set(5, { span: 2, timeRange: MERGED_PERIOD_TIMES['5_6'] });
+    skipPeriods.add(6);
+  } else if (sameLab(e6, e7)) {
+    // 2-hour lab across 6-7
+    mergeMap.set(6, { span: 2, timeRange: MERGED_PERIOD_TIMES['6_7'] });
+    skipPeriods.add(7);
+  }
+
+  return { mergeMap, skipPeriods };
+}
 
 export default function AdminTimetable() {
   const { activeDepartment } = useAuth();
@@ -1051,34 +1101,24 @@ export default function AdminTimetable() {
               <tbody>
                 {DAYS.map((day) => {
                   // ── Lab Block Merge Logic ──────────────────────────────────────
-                  // Detect which consecutive period pairs share the same lab subject.
-                  // Only pairs with no break column between them can merge visually.
                   const isLabSlot = (p) => {
                     const es = gridMap.get(`${day}_${p}`) || [];
                     if (es.length !== 1) return null;
                     const e = es[0];
                     return (e.session_type === 'lab' || e.is_lab) ? e : null;
                   };
-                  const mergeStarts = new Set();
-                  const skipPeriods = new Set();
-                  for (const [p1, p2] of LAB_MERGE_CANDIDATES) {
-                    const e1 = isLabSlot(p1);
-                    const e2 = isLabSlot(p2);
-                    if (e1 && e2 && String(e1.subject_id) === String(e2.subject_id)) {
-                      mergeStarts.add(p1);
-                      skipPeriods.add(p2);
-                    }
-                  }
+
+                  const { mergeMap, skipPeriods } = computeLabMerges(isLabSlot);
 
                   // Helper to render one period <td> (handles merge start, merge skip, normal)
                   const renderPeriodTd = (p) => {
                     if (skipPeriods.has(p)) return null; // consumed by the preceding merged cell
-                    const isMerge = mergeStarts.has(p);
+                    const mergeInfo = mergeMap.get(p);
                     const isDragOver = dragOverKey === `${day}_${p}`;
                     return (
                       <td
                         key={p}
-                        colSpan={isMerge ? 2 : 1}
+                        colSpan={mergeInfo ? mergeInfo.span : 1}
                         onClick={() => handleSlotClick(day, p)}
                         onDragOver={(e) => handleDragOver(e, day, p)}
                         onDragLeave={handleDragLeave}
@@ -1087,10 +1127,11 @@ export default function AdminTimetable() {
                           isDragOver ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
                         }`}
                       >
-                        {isMerge ? (
+                        {mergeInfo ? (
                           <MergedLabCell
                             entry={(gridMap.get(`${day}_${p}`) || [])[0]}
-                            timeRange={MERGED_PERIOD_TIMES[`${p}_${p + 1}`] || ''}
+                            timeRange={mergeInfo.timeRange}
+                            span={mergeInfo.span}
                             onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
                           />
                         ) : (
@@ -1861,13 +1902,13 @@ export default function AdminTimetable() {
           </thead>
           <tbody>
             {DAYS.map((day, dIdx) => {
-              const p1 = gridMap.get(`${day}_1`) || [];
-              const p2 = gridMap.get(`${day}_2`) || [];
-              const p3 = gridMap.get(`${day}_3`) || [];
-              const p4 = gridMap.get(`${day}_4`) || [];
-              const p5 = gridMap.get(`${day}_5`) || [];
-              const p6 = gridMap.get(`${day}_6`) || [];
-              const p7 = gridMap.get(`${day}_7`) || [];
+              const isLabSlot = (p) => {
+                const es = gridMap.get(`${day}_${p}`) || [];
+                if (es.length !== 1) return null;
+                const e = es[0];
+                return (e.session_type === 'lab' || e.is_lab) ? e : null;
+              };
+              const { mergeMap, skipPeriods } = computeLabMerges(isLabSlot);
 
               const renderPrintCell = (items) => {
                 if (!items || items.length === 0) return <span className="text-slate-300 font-mono text-[9px]">—</span>;
@@ -1893,6 +1934,30 @@ export default function AdminTimetable() {
                 );
               };
 
+              const renderPrintPeriodTd = (p) => {
+                if (skipPeriods.has(p)) return null;
+                const mergeInfo = mergeMap.get(p);
+                const items = gridMap.get(`${day}_${p}`) || [];
+                if (mergeInfo) {
+                  const entry = items[0];
+                  return (
+                    <td key={p} colSpan={mergeInfo.span} className="border border-black p-1 bg-amber-50/40 text-center">
+                      <div className="font-mono font-bold text-[11px] text-black leading-tight">
+                        <span>{entry?.subject_code}</span>
+                        <span className="block text-[8px] font-sans font-semibold text-amber-800">
+                          LAB ({mergeInfo.span}h • {mergeInfo.timeRange})
+                        </span>
+                      </div>
+                    </td>
+                  );
+                }
+                return (
+                  <td key={p} className="border border-black p-1">
+                    {renderPrintCell(items)}
+                  </td>
+                );
+              };
+
               return (
                 <tr key={day} className="h-10">
                   <td className="border border-black bg-slate-50 font-bold text-black text-[11px] uppercase tracking-wider py-1 px-1">
@@ -1900,8 +1965,8 @@ export default function AdminTimetable() {
                   </td>
 
                   {/* Period 1 & 2 */}
-                  <td className="border border-black p-1">{renderPrintCell(p1)}</td>
-                  <td className="border border-black p-1">{renderPrintCell(p2)}</td>
+                  {renderPrintPeriodTd(1)}
+                  {renderPrintPeriodTd(2)}
 
                   {/* Tea Break: spanning all 6 rows */}
                   {dIdx === 0 && (
@@ -1921,8 +1986,8 @@ export default function AdminTimetable() {
                   )}
 
                   {/* Period 3 & 4 */}
-                  <td className="border border-black p-1">{renderPrintCell(p3)}</td>
-                  <td className="border border-black p-1">{renderPrintCell(p4)}</td>
+                  {renderPrintPeriodTd(3)}
+                  {renderPrintPeriodTd(4)}
 
                   {/* Lunch Break: spanning all 6 rows */}
                   {dIdx === 0 && (
@@ -1944,9 +2009,9 @@ export default function AdminTimetable() {
                   )}
 
                   {/* Period 5, 6, 7 */}
-                  <td className="border border-black p-1">{renderPrintCell(p5)}</td>
-                  <td className="border border-black p-1">{renderPrintCell(p6)}</td>
-                  <td className="border border-black p-1">{renderPrintCell(p7)}</td>
+                  {renderPrintPeriodTd(5)}
+                  {renderPrintPeriodTd(6)}
+                  {renderPrintPeriodTd(7)}
                 </tr>
               );
             })}
@@ -2044,9 +2109,9 @@ const SESSION_STYLES = {
   activity: { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-950', badge: 'bg-teal-200 text-teal-800', label: 'ACT' },
 };
 
-// Merged Lab Cell — rendered when two consecutive periods share the same lab subject.
-// Spans 2 columns (colSpan=2) with a wider layout showing subject code, faculty, time range.
-function MergedLabCell({ entry, timeRange, onDragStart }) {
+// Merged Lab Cell — rendered when 2 or 3 consecutive periods share the same lab subject.
+// Spans 2 or 3 columns (colSpan=2 or colSpan=3) with a wider layout showing subject code, faculty, time range.
+function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
   if (!entry) {
     return (
       <div className="h-full min-h-[58px] flex items-center justify-center">
@@ -2072,7 +2137,7 @@ function MergedLabCell({ entry, timeRange, onDragStart }) {
       </div>
       <div className="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 uppercase">LAB</span>
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">2h</span>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">{span}h</span>
       </div>
     </div>
   );

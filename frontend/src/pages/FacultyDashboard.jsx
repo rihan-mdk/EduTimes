@@ -25,6 +25,59 @@ const PERIOD_TIMES = {
   7: { start: '15:30:00', end: '16:15:00', label: '15:30 - 16:15' },
 };
 
+const MERGED_PERIOD_TIMES = {
+  '1_2': '09:00 - 10:50',
+  '3_4': '11:10 - 13:00',
+  '5_6': '13:50 - 15:30',
+  '6_7': '14:40 - 16:15',
+  '5_7': '13:50 - 16:15',
+};
+
+function computeLabMerges(getLabEntryAt) {
+  const mergeMap = new Map();
+  const skipPeriods = new Set();
+
+  const sameLab = (e1, e2) => {
+    if (!e1 || !e2) return false;
+    const id1 = e1.subject_id || e1.id;
+    const id2 = e2.subject_id || e2.id;
+    if (id1 && id2 && String(id1) === String(id2)) return true;
+    return Boolean(e1.subject_code && e1.subject_code === e2.subject_code);
+  };
+
+  const e1 = getLabEntryAt(1);
+  const e2 = getLabEntryAt(2);
+  if (sameLab(e1, e2)) {
+    mergeMap.set(1, { span: 2, timeRange: MERGED_PERIOD_TIMES['1_2'] });
+    skipPeriods.add(2);
+  }
+
+  const e3 = getLabEntryAt(3);
+  const e4 = getLabEntryAt(4);
+  if (sameLab(e3, e4)) {
+    mergeMap.set(3, { span: 2, timeRange: MERGED_PERIOD_TIMES['3_4'] });
+    skipPeriods.add(4);
+  }
+
+  const e5 = getLabEntryAt(5);
+  const e6 = getLabEntryAt(6);
+  const e7 = getLabEntryAt(7);
+
+  if (sameLab(e5, e6) && sameLab(e6, e7)) {
+    mergeMap.set(5, { span: 3, timeRange: MERGED_PERIOD_TIMES['5_7'] });
+    skipPeriods.add(6);
+    skipPeriods.add(7);
+  } else if (sameLab(e5, e6)) {
+    mergeMap.set(5, { span: 2, timeRange: MERGED_PERIOD_TIMES['5_6'] });
+    skipPeriods.add(6);
+  } else if (sameLab(e6, e7)) {
+    mergeMap.set(6, { span: 2, timeRange: MERGED_PERIOD_TIMES['6_7'] });
+    skipPeriods.add(7);
+  }
+
+  return { mergeMap, skipPeriods };
+}
+
 export default function FacultyDashboard() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -289,6 +342,28 @@ export default function FacultyDashboard() {
               <tbody>
                 {DAYS.map((day) => {
                   const isToday = day === todayDayName;
+
+                  const isLabSlot = (p) => {
+                    const e = gridMap.get(`${day}_${p}`);
+                    if (!e) return null;
+                    return (e.session_type === 'lab' || e.is_lab) ? e : null;
+                  };
+                  const { mergeMap, skipPeriods } = computeLabMerges(isLabSlot);
+
+                  const renderPeriodTd = (p) => {
+                    if (skipPeriods.has(p)) return null;
+                    const mergeInfo = mergeMap.get(p);
+                    return (
+                      <td key={p} colSpan={mergeInfo ? mergeInfo.span : 1} className="border border-slate-300 p-1.5">
+                        <FacultySlotCell
+                          entry={gridMap.get(`${day}_${p}`)}
+                          span={mergeInfo ? mergeInfo.span : 1}
+                          timeRange={mergeInfo?.timeRange}
+                        />
+                      </td>
+                    );
+                  };
+
                   return (
                     <tr key={day} className={`h-20 ${isToday ? 'bg-orange-50/30' : ''}`}>
                       <td className={`border border-slate-300 font-bold text-xs px-2 py-3 ${
@@ -304,41 +379,23 @@ export default function FacultyDashboard() {
                         </div>
                       </td>
 
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_1`)} />
-                      </td>
-
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_2`)} />
-                      </td>
+                      {renderPeriodTd(1)}
+                      {renderPeriodTd(2)}
 
                       <td className="border border-slate-300 bg-amber-50/30 text-slate-300 text-xs">
                         ||
                       </td>
 
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_3`)} />
-                      </td>
-
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_4`)} />
-                      </td>
+                      {renderPeriodTd(3)}
+                      {renderPeriodTd(4)}
 
                       <td className="border border-slate-300 bg-amber-50/30 text-slate-300 text-xs">
                         ||
                       </td>
 
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_5`)} />
-                      </td>
-
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_6`)} />
-                      </td>
-
-                      <td className="border border-slate-300 p-1.5">
-                        <FacultySlotCell entry={gridMap.get(`${day}_7`)} />
-                      </td>
+                      {renderPeriodTd(5)}
+                      {renderPeriodTd(6)}
+                      {renderPeriodTd(7)}
                     </tr>
                   );
                 })}
@@ -351,7 +408,7 @@ export default function FacultyDashboard() {
   );
 }
 
-function FacultySlotCell({ entry }) {
+function FacultySlotCell({ entry, span = 1, timeRange }) {
   if (!entry) {
     return (
       <div className="h-full min-h-[58px] flex items-center justify-center text-slate-300 text-xs font-dashed">
@@ -360,7 +417,7 @@ function FacultySlotCell({ entry }) {
     );
   }
 
-  const isLab = entry.is_lab;
+  const isLab = entry.is_lab || entry.session_type === 'lab';
 
   return (
     <div className={`h-full min-h-[58px] p-2 rounded-md flex flex-col justify-center text-left border shadow-xs ${
@@ -369,7 +426,14 @@ function FacultySlotCell({ entry }) {
         : 'bg-blue-50 border-blue-300 text-blue-950'
     }`}>
       <div className="flex items-center justify-between">
-        <span className="font-mono font-bold text-xs">{entry.subject_code}</span>
+        <div className="flex items-center gap-1.5">
+          <span className="font-mono font-bold text-xs">{entry.subject_code}</span>
+          {span > 1 && (
+            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-300 text-amber-900">
+              {span}h
+            </span>
+          )}
+        </div>
         <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-white/80 border border-slate-200">
           S{entry.semester_number} ({entry.class_room})
         </span>
@@ -377,6 +441,11 @@ function FacultySlotCell({ entry }) {
       <div className="text-[11px] font-medium text-slate-800 truncate leading-snug mt-0.5">
         {entry.subject_name}
       </div>
+      {timeRange && (
+        <div className="text-[9px] font-mono text-amber-600 mt-0.5">
+          {timeRange}
+        </div>
+      )}
     </div>
   );
 }

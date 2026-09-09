@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
-import { Lock, User, Loader2, AlertCircle, Calendar, Building2, ArrowLeft, Plus } from 'lucide-react';
+import { Lock, User, Loader2, AlertCircle, Calendar, Building2, ArrowLeft, Plus, Eye, EyeOff } from 'lucide-react';
 
 export default function Login({ onLoginSuccess }) {
   const { login } = useAuth();
@@ -24,6 +24,10 @@ export default function Login({ onLoginSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [bgLoaded, setBgLoaded] = useState(false);
+
+  // Show/hide password toggles
+  const [showPassword, setShowPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
 
   // â”€â”€â”€ Step 1: Check dept code â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCheckDept = async (e) => {
@@ -250,14 +254,21 @@ export default function Login({ onLoginSuccess }) {
                       <Lock className="w-4 h-4" />
                     </div>
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full pl-10 pr-3 py-3 rounded-xl text-sm text-white placeholder:text-white/35 outline-none transition-all focus:ring-2 focus:ring-orange-400"
+                      className="block w-full pl-10 pr-10 py-3 rounded-xl text-sm text-white placeholder:text-white/35 outline-none transition-all focus:ring-2 focus:ring-orange-400"
                       style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.25)' }}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-white/50 hover:text-white/80 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
                 <button
@@ -360,15 +371,24 @@ export default function Login({ onLoginSuccess }) {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-white/80 mb-1.5">Password</label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="••••••••"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      className="block w-full px-3 py-2.5 rounded-lg text-sm text-white placeholder:text-white/35 outline-none transition-all focus:ring-2 focus:ring-orange-400"
-                      style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}
-                    />
+                    <div className="relative">
+                      <input
+                        type={showAdminPassword ? 'text' : 'password'}
+                        required
+                        placeholder="••••••••"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        className="block w-full pl-3 pr-10 py-2.5 rounded-lg text-sm text-white placeholder:text-white/35 outline-none transition-all focus:ring-2 focus:ring-orange-400"
+                        style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminPassword(!showAdminPassword)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-white/50 hover:text-white/80 transition-colors"
+                      >
+                        {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <button
