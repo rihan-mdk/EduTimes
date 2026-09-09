@@ -19,7 +19,10 @@ import {
   Building2,
   RotateCcw,
   Pencil,
-  Layers
+  Layers,
+  ChevronDown,
+  FileText,
+  FileSpreadsheet
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -114,6 +117,21 @@ export default function AdminTimetable() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const exportDropdownRef = useRef(null);
+
+  // Close export dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target)) {
+        setExportDropdownOpen(false);
+      }
+    }
+    if (exportDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [exportDropdownOpen]);
 
   // Manual Edit State (Slot click)
   const [selectedSlot, setSelectedSlot] = useState(null); // { day, period_number, timeslot_id, existingEntries }
@@ -839,6 +857,114 @@ export default function AdminTimetable() {
     }
   };
 
+  // 7. CSV Export Feature (Spreadsheet with Schedule Matrix & Subject Details)
+  const handleExportCSV = () => {
+    try {
+      const semNum = currentSemester?.number || '';
+      const deptName = activeDepartment?.name || 'Department';
+      const deptCode = activeDepartment?.code || 'DEPT';
+      const semType = ((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN';
+
+      const escapeCSV = (val) => {
+        if (val === null || val === undefined) return '""';
+        const str = String(val).replace(/"/g, '""');
+        return `"${str}"`;
+      };
+
+      const rows = [];
+      rows.push([`YENEPOYA INSTITUTE OF TECHNOLOGY - Department of ${deptName}`]);
+      rows.push([`TIME TABLE - ${semType} SEMESTER (AY ${academicYear}) | Semester ${semNum} (Room: ${currentSemester?.class_room || 'LLH-01'})`]);
+      rows.push([]);
+
+      // Timetable Matrix Header
+      rows.push([
+        'Day',
+        'Period 1 (09:00 - 09:55)',
+        'Period 2 (09:55 - 10:50)',
+        'Tea Break',
+        'Period 3 (11:10 - 12:05)',
+        'Period 4 (12:05 - 13:00)',
+        'Lunch Break',
+        'Period 5 (13:50 - 14:40)',
+        'Period 6 (14:40 - 15:30)',
+        'Period 7 (15:30 - 16:15)'
+      ]);
+
+      // Daily rows
+      DAYS.forEach((day) => {
+        const getSlotText = (p) => {
+          const entries = gridMap.get(`${day}_${p}`) || [];
+          if (entries.length === 0) return '—';
+          return entries.map(e => {
+            const code = e.subject_code || '';
+            const fac = e.faculty_code ? ` [${e.faculty_code}]` : '';
+            const type = (e.is_lab || e.session_type === 'lab') ? ' (LAB)' : '';
+            return `${code}${fac}${type}`;
+          }).join(' / ');
+        };
+
+        rows.push([
+          day,
+          getSlotText(1),
+          getSlotText(2),
+          '||',
+          getSlotText(3),
+          getSlotText(4),
+          '||',
+          getSlotText(5),
+          getSlotText(6),
+          getSlotText(7)
+        ]);
+      });
+
+      rows.push([]);
+      rows.push(['--- SUBJECT REFERENCE LEGEND ---']);
+      rows.push(['Subject Code', 'Subject Title', 'Faculty Name', 'Faculty Code', 'Weekly Hours', 'Type']);
+
+      const seen = new Set();
+      const legendRows = timetableEntries
+        .filter(e => {
+          if (!e.subject_code || seen.has(e.subject_code)) return false;
+          seen.add(e.subject_code);
+          return true;
+        })
+        .sort((a, b) => (a.subject_code || '').localeCompare(b.subject_code || ''));
+
+      legendRows.forEach(e => {
+        const sub = subjects.find(s => String(s.id) === String(e.subject_id)) || {};
+        rows.push([
+          e.subject_code || '',
+          e.subject_name || sub.name || '',
+          e.faculty_name || sub.faculty_name || '—',
+          e.faculty_code || sub.faculty_code || '—',
+          sub.weekly_hours || e.weekly_hours || '',
+          (e.is_lab || e.session_type === 'lab' || sub.is_lab) ? 'Laboratory' : 'Theory'
+        ]);
+      });
+
+      rows.push([]);
+      rows.push(['Class Room', currentSemester?.class_room || 'LLH-01']);
+      rows.push(['Class Advisor', currentSemester?.class_advisor || '—']);
+      rows.push(['Mentors', currentSemester?.mentors || '—']);
+
+      const csvContent = '\uFEFF' + rows.map(r => r.map(escapeCSV).join(',')).join('\r\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Timetable_${deptCode}_Sem_${semNum || 'View'}_${academicYear}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      addToast('Timetable CSV exported successfully!', 'success');
+      setExportDropdownOpen(false);
+    } catch (err) {
+      addToast('Failed to export CSV: ' + err.message, 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header & Semester Selector */}
@@ -914,14 +1040,59 @@ export default function AdminTimetable() {
             )}
           </button>
 
-          <button
-            onClick={handleExportPDF}
-            disabled={exporting || timetableEntries.length === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors"
-          >
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            Export PDF
-          </button>
+          {/* Export Dropdown Button (PDF & CSV) */}
+          <div className="relative" ref={exportDropdownRef}>
+            <button
+              type="button"
+              onClick={() => setExportDropdownOpen(prev => !prev)}
+              disabled={exporting || timetableEntries.length === 0}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              {exporting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              <span>Export</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform ${exportDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {exportDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportDropdownOpen(false);
+                    handleExportPDF();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-rose-500 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-800">Export as PDF</div>
+                    <div className="text-[10px] text-slate-400 font-normal">Official Institutional Format (.pdf)</div>
+                  </div>
+                </button>
+
+                <div className="border-t border-slate-100 my-0.5" />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportDropdownOpen(false);
+                    handleExportCSV();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-slate-800">Export as CSV</div>
+                    <div className="text-[10px] text-slate-400 font-normal">Spreadsheet / Excel Format (.csv)</div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             onClick={handleClearSemester}
@@ -1579,44 +1750,44 @@ export default function AdminTimetable() {
           color: '#0f172a',
           fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif",
         }}
-        className="p-6 bg-white text-slate-900 border-2 border-slate-900 box-border"
+        className="p-5 bg-white text-slate-900 border-2 border-slate-900 box-border"
       >
         {/* 1. Official Header */}
-        <div className="flex items-center justify-between border-b-2 border-slate-900 pb-2 mb-2">
+        <div className="flex items-center justify-between border-b-2 border-slate-900 pb-1.5 mb-1.5">
           <div className="w-28 text-center flex flex-col items-center">
             <div className="border-2 border-slate-900 px-3 py-1 font-serif font-black text-sm tracking-wider inline-block">
               YIT
             </div>
-            <span className="text-[7.5px] font-extrabold tracking-widest text-slate-700 mt-0.5">YENEPOYA</span>
+            <span className="text-[7px] font-extrabold tracking-widest text-slate-700 mt-0.5">YENEPOYA</span>
           </div>
           <div className="flex-1 text-center px-4">
-            <h1 className="text-[17px] font-black tracking-wide uppercase font-serif text-slate-900 leading-tight">
+            <h1 className="text-[16px] font-black tracking-wide uppercase font-serif text-slate-900 leading-tight">
               Yenepoya Institute of Technology
             </h1>
-            <p className="text-[9.5px] text-slate-600 font-medium tracking-normal mt-0.5">
+            <p className="text-[9px] text-slate-600 font-medium tracking-normal">
               NH-13, Thodar, Moodbidri, Mangalore, Karnataka - 574225
             </p>
-            <p className="text-[11.5px] font-bold text-slate-800 mt-0.5">
+            <p className="text-[11px] font-bold text-slate-800 mt-0.5">
               Department of {activeDepartment?.name || 'Computer Science and Engineering'}
             </p>
-            <div className="inline-block bg-slate-100 border border-slate-300 rounded px-2.5 py-0.5 mt-1">
-              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-900">
+            <div className="inline-block bg-slate-100 border border-slate-300 rounded px-2 py-0.5 mt-0.5">
+              <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-slate-900">
                 Class Time Table • {((currentSemester?.number || 1) % 2 === 1) ? 'Odd' : 'Even'} Semester (AY {academicYear})
               </span>
             </div>
           </div>
           <div className="w-28 text-right flex flex-col items-end">
             {activeDepartment?.code && (
-              <span className="border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[10px] font-extrabold uppercase">
+              <span className="border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[9.5px] font-extrabold uppercase">
                 DEPT: {activeDepartment.code}
               </span>
             )}
-            <span className="text-[8px] font-mono text-slate-500 mt-1">Single Page Official</span>
+            <span className="text-[7.5px] font-mono text-slate-500 mt-0.5">Single Page Official</span>
           </div>
         </div>
 
         {/* 2. Metadata Sub-Header */}
-        <div className="grid grid-cols-3 border border-slate-800 text-[10.5px] font-bold uppercase mb-2 text-center py-1 bg-slate-100/70">
+        <div className="grid grid-cols-3 border border-slate-800 text-[10px] font-bold uppercase mb-1.5 text-center py-0.5 bg-slate-100/70">
           <div className="border-r border-slate-800 px-2 flex items-center justify-center gap-1">
             <span className="text-slate-500 font-medium">Class:</span>
             <span>{(() => {
@@ -1636,43 +1807,43 @@ export default function AdminTimetable() {
         </div>
 
         {/* 3. Timetable Grid */}
-        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2.5 table-fixed">
+        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2 table-fixed">
           <thead>
-            <tr className="bg-slate-100 text-slate-900 font-bold text-[9.5px] uppercase">
-              <th className="border border-slate-800 py-1.5 px-1 w-[82px]">Day \ Time</th>
+            <tr className="bg-slate-100 text-slate-900 font-bold text-[9px] uppercase">
+              <th className="border border-slate-800 py-1 px-1 w-[80px]">Day \ Time</th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>09:00AM - 09:55AM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 1</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 1</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>09:55AM - 10:50AM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 2</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 2</div>
               </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[28px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
+              <th className="border border-slate-800 py-1 px-0.5 w-[26px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
                 TEA
               </th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>11:10AM - 12:05PM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 3</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 3</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>12:05PM - 01:00PM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 4</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 4</div>
               </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[28px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
+              <th className="border border-slate-800 py-1 px-0.5 w-[26px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
                 LUNCH
               </th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>01:50PM - 02:40PM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 5</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 5</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>02:40PM - 03:30PM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 6</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 6</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
                 <div>03:30PM - 04:15PM</div>
-                <div className="text-[8.5px] font-normal font-mono text-slate-600">Period 7</div>
+                <div className="text-[8px] font-normal font-mono text-slate-600">Period 7</div>
               </th>
             </tr>
           </thead>
@@ -1694,9 +1865,9 @@ export default function AdminTimetable() {
                     <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
                       <span className="font-mono font-bold text-[11px] text-slate-900 tracking-tight">{it.subject_code}</span>
                       {(it.is_lab || it.session_type === 'lab') ? (
-                        <span className="text-[7.5px] font-sans font-bold text-amber-900 bg-amber-200/80 px-1 py-0.2 rounded mt-0.5">LAB</span>
+                        <span className="text-[7.5px] font-mono font-bold text-slate-700 mt-0.5">[LAB]</span>
                       ) : it.session_type === 'activity' ? (
-                        <span className="text-[7.5px] font-sans font-bold text-teal-900 bg-teal-200/80 px-1 py-0.2 rounded mt-0.5">ACT</span>
+                        <span className="text-[7.5px] font-mono font-semibold text-slate-600 mt-0.5">[ACT]</span>
                       ) : null}
                     </div>
                   );
@@ -1705,7 +1876,7 @@ export default function AdminTimetable() {
                   <div className="h-full flex flex-col items-center justify-center gap-0.5 py-0.5 leading-tight">
                     {items.map((it, idx) => (
                       <div key={idx} className={idx > 0 ? "border-t border-slate-300 pt-0.5 w-full text-center" : ""}>
-                        <span className="font-mono font-bold text-[10px] text-slate-900">{it.subject_code}</span>
+                        <span className="font-mono font-bold text-[9.5px] text-slate-900">{it.subject_code}</span>
                       </div>
                     ))}
                   </div>
@@ -1719,11 +1890,14 @@ export default function AdminTimetable() {
                 if (mergeInfo) {
                   const entry = items[0];
                   return (
-                    <td key={p} colSpan={mergeInfo.span} className="border border-slate-800 p-1 bg-amber-50/70 text-center align-middle">
-                      <div className="h-full flex flex-col items-center justify-center leading-tight">
-                        <span className="font-mono font-bold text-xs text-amber-950 tracking-tight">{entry?.subject_code}</span>
-                        <span className="text-[8px] font-sans font-bold text-amber-900 bg-amber-200/90 px-2 py-0.5 rounded-full mt-0.5 uppercase tracking-wide">
-                          LAB • {mergeInfo.span}h ({mergeInfo.timeRange})
+                    <td key={p} colSpan={mergeInfo.span} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 text-center align-middle">
+                      <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
+                        <span className="font-mono font-bold text-[11.5px] text-slate-900 tracking-tight">{entry?.subject_code}</span>
+                        <span className="text-[8px] font-mono font-bold text-slate-700 uppercase tracking-wide mt-0.5">
+                          [LAB • {mergeInfo.span}H]
+                        </span>
+                        <span className="text-[7.5px] font-mono text-slate-500">
+                          {mergeInfo.timeRange}
                         </span>
                       </div>
                     </td>
@@ -1737,8 +1911,8 @@ export default function AdminTimetable() {
               };
 
               return (
-                <tr key={day} className="h-11">
-                  <td className="border border-slate-800 bg-slate-100/60 font-bold text-slate-900 text-[10.5px] uppercase tracking-wider py-1 px-1 align-middle">
+                <tr key={day} className="h-9">
+                  <td className="border border-slate-800 bg-slate-100/60 font-bold text-slate-900 text-[10px] uppercase tracking-wider py-0.5 px-1 align-middle">
                     {day}
                   </td>
 
@@ -1748,12 +1922,12 @@ export default function AdminTimetable() {
 
                   {/* Tea Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-amber-50/40 text-center py-2 px-0.5 w-[28px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-extrabold text-[8px] tracking-widest text-amber-950 leading-tight">
+                    <td rowSpan={6} className="border border-slate-800 bg-slate-50 text-center py-1 px-0.5 w-[26px] align-middle">
+                      <div className="flex flex-col items-center justify-center font-extrabold text-[7.5px] tracking-widest text-slate-800 leading-tight">
                         <span>T</span>
                         <span>E</span>
                         <span>A</span>
-                        <span className="my-1 text-[6px] text-amber-700">•</span>
+                        <span className="my-0.5 text-[5px] text-slate-600">•</span>
                         <span>B</span>
                         <span>R</span>
                         <span>E</span>
@@ -1769,14 +1943,14 @@ export default function AdminTimetable() {
 
                   {/* Lunch Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-amber-50/40 text-center py-2 px-0.5 w-[28px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-extrabold text-[8px] tracking-widest text-amber-950 leading-tight">
+                    <td rowSpan={6} className="border border-slate-800 bg-slate-50 text-center py-1 px-0.5 w-[26px] align-middle">
+                      <div className="flex flex-col items-center justify-center font-extrabold text-[7.5px] tracking-widest text-slate-800 leading-tight">
                         <span>L</span>
                         <span>U</span>
                         <span>N</span>
                         <span>C</span>
                         <span>H</span>
-                        <span className="my-1 text-[6px] text-amber-700">•</span>
+                        <span className="my-0.5 text-[5px] text-slate-600">•</span>
                         <span>B</span>
                         <span>R</span>
                         <span>E</span>
@@ -1811,35 +1985,35 @@ export default function AdminTimetable() {
           const mentors = currentSemester?.mentors || '—';
 
           return (
-            <div className="border border-slate-800 mb-2.5 text-xs">
+            <div className="border border-slate-800 mb-2 text-xs">
               <table className="w-full border-collapse text-left">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-900 font-bold text-[9.5px] uppercase border-b border-slate-800">
-                    <th className="border-r border-slate-800 px-3 py-1 w-32 font-mono">Subject Code</th>
-                    <th className="border-r border-slate-800 px-3 py-1">Subject Title</th>
-                    <th className="px-3 py-1 w-72">Faculty In-Charge</th>
+                  <tr className="bg-slate-100 text-slate-900 font-bold text-[9px] uppercase border-b border-slate-800">
+                    <th className="border-r border-slate-800 px-2.5 py-0.5 w-32 font-mono">Subject Code</th>
+                    <th className="border-r border-slate-800 px-2.5 py-0.5">Subject Title</th>
+                    <th className="px-2.5 py-0.5 w-72">Faculty In-Charge</th>
                   </tr>
                 </thead>
                 <tbody>
                   {printLegend.map((it, idx) => (
-                    <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[10px]">
-                      <td className="border-r border-slate-800 px-3 py-0.5 font-mono font-bold text-slate-900">
+                    <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[9.5px]">
+                      <td className="border-r border-slate-800 px-2.5 py-0.5 font-mono font-bold text-slate-900">
                         {it.subject_code}
                       </td>
-                      <td className="border-r border-slate-800 px-3 py-0.5 text-slate-800 font-medium">
+                      <td className="border-r border-slate-800 px-2.5 py-0.5 text-slate-800 font-medium">
                         {it.subject_name}
                       </td>
-                      <td className="px-3 py-0.5 text-slate-800 font-medium">
+                      <td className="px-2.5 py-0.5 text-slate-800 font-medium">
                         {it.faculty_name || '—'}
                       </td>
                     </tr>
                   ))}
                   {/* Advisor and Mentors footer row */}
-                  <tr className="bg-slate-100/70 border-t border-slate-800 font-semibold text-[10px] text-slate-900">
-                    <td colSpan={2} className="border-r border-slate-800 px-3 py-1">
+                  <tr className="bg-slate-100/70 border-t border-slate-800 font-semibold text-[9.5px] text-slate-900">
+                    <td colSpan={2} className="border-r border-slate-800 px-2.5 py-0.5">
                       <strong className="text-slate-900 font-bold">Class Advisor:</strong> <span className="text-slate-800 font-medium">{advisor}</span>
                     </td>
-                    <td className="px-3 py-1">
+                    <td className="px-2.5 py-0.5">
                       <strong className="text-slate-900 font-bold">Mentors:</strong> <span className="text-slate-800 font-medium">{mentors}</span>
                     </td>
                   </tr>
@@ -1850,24 +2024,24 @@ export default function AdminTimetable() {
         })()}
 
         {/* 5. Signatures Footer */}
-        <div className="grid grid-cols-3 text-center text-xs font-bold pt-3 mt-1">
+        <div className="grid grid-cols-3 text-center text-[11px] font-bold pt-2">
           <div>
-            <div className="h-6" />
-            <div className="border-t border-slate-800 pt-1 inline-block min-w-[170px] text-slate-900">
+            <div className="h-5" />
+            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
               Time Table Coordinator
             </div>
           </div>
           <div>
-            <div className="h-6" />
-            <div className="border-t border-slate-800 pt-1 inline-block min-w-[170px] text-slate-900">
+            <div className="h-5" />
+            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
               Head of the Department
             </div>
           </div>
           <div>
-            <div className="h-6" />
-            <div className="border-t border-slate-800 pt-1 inline-block min-w-[170px] text-slate-900">
+            <div className="h-5" />
+            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
               <div>Principal</div>
-              <div className="text-[7.5px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
+              <div className="text-[7px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
                 Yenepoya Institute of Technology<br />
                 N.H.13, Thodar, Moodbidri - 574225
               </div>
