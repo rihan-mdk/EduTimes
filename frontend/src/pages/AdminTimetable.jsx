@@ -49,7 +49,7 @@ const MERGED_PERIOD_TIMES = {
 };
 
 // Segments within a day separated by break columns: [1, 2], [3, 4], [5, 6, 7]
-// Detects 2-hour or 3-hour continuous lab sessions strictly within each segment.
+// Detects 2-hour or 3-hour continuous lab or block-theory sessions strictly within each segment.
 function computeLabMerges(getLabEntryAt) {
   const mergeMap = new Map();
   const skipPeriods = new Set();
@@ -62,11 +62,17 @@ function computeLabMerges(getLabEntryAt) {
     return Boolean(e1.subject_code && e1.subject_code === e2.subject_code);
   };
 
+  const createMergeInfo = (span, timeRange, entry) => {
+    const isLab = Boolean(entry?.is_lab || entry?.session_type === 'lab');
+    const tag = isLab ? `[LAB - ${span}H]` : `[THEORY - ${span}H]`;
+    return { span, timeRange, isLab, tag };
+  };
+
   // Segment 1: [1, 2]
   const e1 = getLabEntryAt(1);
   const e2 = getLabEntryAt(2);
   if (sameLab(e1, e2)) {
-    mergeMap.set(1, { span: 2, timeRange: MERGED_PERIOD_TIMES['1_2'] });
+    mergeMap.set(1, createMergeInfo(2, MERGED_PERIOD_TIMES['1_2'], e1));
     skipPeriods.add(2);
   }
 
@@ -74,7 +80,7 @@ function computeLabMerges(getLabEntryAt) {
   const e3 = getLabEntryAt(3);
   const e4 = getLabEntryAt(4);
   if (sameLab(e3, e4)) {
-    mergeMap.set(3, { span: 2, timeRange: MERGED_PERIOD_TIMES['3_4'] });
+    mergeMap.set(3, createMergeInfo(2, MERGED_PERIOD_TIMES['3_4'], e3));
     skipPeriods.add(4);
   }
 
@@ -85,16 +91,16 @@ function computeLabMerges(getLabEntryAt) {
 
   if (sameLab(e5, e6) && sameLab(e6, e7)) {
     // 3-hour continuous lab
-    mergeMap.set(5, { span: 3, timeRange: MERGED_PERIOD_TIMES['5_7'] });
+    mergeMap.set(5, createMergeInfo(3, MERGED_PERIOD_TIMES['5_7'], e5));
     skipPeriods.add(6);
     skipPeriods.add(7);
   } else if (sameLab(e5, e6)) {
     // 2-hour lab across 5-6
-    mergeMap.set(5, { span: 2, timeRange: MERGED_PERIOD_TIMES['5_6'] });
+    mergeMap.set(5, createMergeInfo(2, MERGED_PERIOD_TIMES['5_6'], e5));
     skipPeriods.add(6);
   } else if (sameLab(e6, e7)) {
     // 2-hour lab across 6-7
-    mergeMap.set(6, { span: 2, timeRange: MERGED_PERIOD_TIMES['6_7'] });
+    mergeMap.set(6, createMergeInfo(2, MERGED_PERIOD_TIMES['6_7'], e6));
     skipPeriods.add(7);
   }
 
@@ -114,6 +120,8 @@ export default function AdminTimetable() {
   const [timetableEntries, setTimetableEntries] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [timeslots, setTimeslots] = useState([]);
+  const [calendarDates, setCalendarDates] = useState([]);
+  const [facultyList, setFacultyList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -162,14 +170,18 @@ export default function AdminTimetable() {
     async function init() {
       setLoading(true);
       try {
-        const [semRes, subRes, tsRes] = await Promise.all([
+        const [semRes, subRes, tsRes, calRes, facRes] = await Promise.all([
           api.getSemesters(),
           api.getSubjects(),
-          api.getTimeslots()
+          api.getTimeslots(),
+          api.getCalendar().catch(() => []),
+          api.getFaculty().catch(() => [])
         ]);
         setSemesters(semRes);
         setSubjects(subRes);
         setTimeslots(tsRes);
+        setCalendarDates(Array.isArray(calRes) ? calRes : []);
+        setFacultyList(Array.isArray(facRes) ? facRes : []);
 
         const activeSemList = activeDepartment?.id
           ? semRes.filter(s => String(s.department_id) === String(activeDepartment.id))
@@ -230,6 +242,61 @@ export default function AdminTimetable() {
 
   const currentSemester = semesters.find(s => String(s.id) === String(selectedSemesterId));
   const semesterSubjects = subjects.filter(s => String(s.semester_id) === String(selectedSemesterId));
+
+  // Determine Roman Numeral representation of current semester
+  const romanSemester = React.useMemo(() => {
+    const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
+    const num = currentSemester?.number;
+    return ROMAN[num] || (num ? `${num}th` : 'III');
+  }, [currentSemester]);
+
+  // Derive W.E.F (With Effect From) date from first working day of academic_calendar (DD.MM.YYYY)
+  const wefDate = React.useMemo(() => {
+    if (!calendarDates || calendarDates.length === 0) return '01.09.2026';
+    const workingDays = [...calendarDates]
+      .filter(c => c.type === 'working' && c.date)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    if (workingDays.length === 0) return '01.09.2026';
+    const firstDate = workingDays[0].date;
+    const parts = firstDate.split('-');
+    if (parts.length === 3) {
+      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+    return firstDate;
+  }, [calendarDates]);
+
+  // Fast lookup map for faculty records
+  const facultyMap = React.useMemo(() => {
+    const map = new Map();
+    (facultyList || []).forEach(f => {
+      if (f && f.id) map.set(String(f.id), f);
+    });
+    return map;
+  }, [facultyList]);
+
+  // Robust resolver for faculty in-charge name & code from subjects or timetable entries
+  const resolveFacultyInfo = (entryOrSub) => {
+    if (!entryOrSub) return { name: '—', code: '' };
+    const facId = entryOrSub.faculty_id;
+    if (facId && facultyMap.has(String(facId))) {
+      const f = facultyMap.get(String(facId));
+      return { name: f.name || '—', code: f.faculty_code || '' };
+    }
+    if (entryOrSub.subject_id) {
+      const sub = subjects.find(s => String(s.id) === String(entryOrSub.subject_id));
+      if (sub?.faculty_id && facultyMap.has(String(sub.faculty_id))) {
+        const f = facultyMap.get(String(sub.faculty_id));
+        return { name: f.name || sub.faculty_name || '—', code: f.faculty_code || sub.faculty_code || '' };
+      }
+      if (sub?.faculty_name) {
+        return { name: sub.faculty_name, code: sub.faculty_code || '' };
+      }
+    }
+    return {
+      name: entryOrSub.faculty_name || '—',
+      code: entryOrSub.faculty_code || ''
+    };
+  };
 
   // Build Grid Map: Key `day_period` -> Array of entries (supports parallel activities)
   const gridMap = new Map();
@@ -857,69 +924,116 @@ export default function AdminTimetable() {
     }
   };
 
-  // 7. CSV Export Feature (Spreadsheet with Schedule Matrix & Subject Details)
+  // 7. CSV Export Feature (Strict 10-Column Format, Capitalized Headers, Double-Quoted)
   const handleExportCSV = () => {
     try {
       const semNum = currentSemester?.number || '';
-      const deptName = activeDepartment?.name || 'Department';
+      const deptName = activeDepartment?.name || 'Department of Computer Science and Engineering';
       const deptCode = activeDepartment?.code || 'DEPT';
       const semType = ((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN';
 
+      // Always pad array to exact 10 columns to guarantee no ragged layout in spreadsheets
+      const padRow = (arr, len = 10) => {
+        const res = [...arr];
+        while (res.length < len) {
+          res.push('');
+        }
+        return res.slice(0, len);
+      };
+
+      // Ensure all cells are properly double-quoted and internal quotes escaped
       const escapeCSV = (val) => {
-        if (val === null || val === undefined) return '""';
-        const str = String(val).replace(/"/g, '""');
-        return `"${str}"`;
+        const str = val === null || val === undefined ? '' : String(val);
+        return `"${str.replace(/"/g, '""')}"`;
       };
 
       const rows = [];
-      rows.push([`YENEPOYA INSTITUTE OF TECHNOLOGY - Department of ${deptName}`]);
-      rows.push([`TIME TABLE - ${semType} SEMESTER (AY ${academicYear}) | Semester ${semNum} (Room: ${currentSemester?.class_room || 'LLH-01'})`]);
-      rows.push([]);
 
-      // Timetable Matrix Header
-      rows.push([
-        'Day',
-        'Period 1 (09:00 - 09:55)',
-        'Period 2 (09:55 - 10:50)',
-        'Tea Break',
-        'Period 3 (11:10 - 12:05)',
-        'Period 4 (12:05 - 13:00)',
-        'Lunch Break',
-        'Period 5 (13:50 - 14:40)',
-        'Period 6 (14:40 - 15:30)',
-        'Period 7 (15:30 - 16:15)'
-      ]);
+      // Header block (all rows padded to 10 cols)
+      rows.push(padRow([`YENEPOYA INSTITUTE OF TECHNOLOGY - DEPARTMENT OF ${deptName.toUpperCase()}`]));
+      rows.push(padRow([`CLASS: ${romanSemester} SEMESTER | CLASS ROOM: ${currentSemester?.class_room || 'LLH-04'} | W.E.F: ${wefDate} | AY ${academicYear} (${semType} SEMESTER)`]));
+      rows.push(padRow([]));
+
+      // 1. Timetable Matrix Section
+      rows.push(padRow(['TIMETABLE SCHEDULE MATRIX']));
+      rows.push(padRow([]));
+      rows.push(padRow([
+        'DAY',
+        'PERIOD 1 (09:00 AM - 09:55 AM)',
+        'PERIOD 2 (09:55 AM - 10:50 AM)',
+        'TEA BREAK (10:50 AM - 11:10 AM)',
+        'PERIOD 3 (11:10 AM - 12:05 PM)',
+        'PERIOD 4 (12:05 PM - 01:00 PM)',
+        'LUNCH BREAK (01:00 PM - 01:50 PM)',
+        'PERIOD 5 (01:50 PM - 02:40 PM)',
+        'PERIOD 6 (02:40 PM - 03:30 PM)',
+        'PERIOD 7 (03:30 PM - 04:15 PM)'
+      ]));
 
       // Daily rows
       DAYS.forEach((day) => {
+        const getMergeableSlot = (p) => {
+          const es = gridMap.get(`${day}_${p}`) || [];
+          if (es.length !== 1) return null;
+          const e = es[0];
+          const sub = subjects.find(s => String(s.id) === String(e.subject_id));
+          const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub?.is_lab);
+          const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
+          if (isLab || isBlock) {
+            return { ...e, is_lab: isLab, is_block: isBlock };
+          }
+          return null;
+        };
+
+        const { mergeMap } = computeLabMerges(getMergeableSlot);
+
         const getSlotText = (p) => {
           const entries = gridMap.get(`${day}_${p}`) || [];
           if (entries.length === 0) return '—';
           return entries.map(e => {
-            const code = e.subject_code || '';
-            const fac = e.faculty_code ? ` [${e.faculty_code}]` : '';
-            const type = (e.is_lab || e.session_type === 'lab') ? ' (LAB)' : '';
-            return `${code}${fac}${type}`;
+            const sub = subjects.find(s => String(s.id) === String(e.subject_id));
+            const fac = resolveFacultyInfo(sub || e);
+            const facStr = fac.code ? ` [${fac.code}]` : (fac.name !== '—' ? ` [${fac.name}]` : '');
+
+            let typeTag = '';
+            if (mergeMap.has(p)) {
+              typeTag = ` ${mergeMap.get(p).tag}`;
+            } else if (e.is_lab || e.session_type === 'lab') {
+              typeTag = ' [LAB]';
+            } else if (e.session_type === 'activity') {
+              typeTag = ' [ACT]';
+            }
+            return `${e.subject_code || ''}${facStr}${typeTag}`;
           }).join(' / ');
         };
 
-        rows.push([
-          day,
+        rows.push(padRow([
+          day.toUpperCase(),
           getSlotText(1),
           getSlotText(2),
-          '||',
+          'TEA BREAK',
           getSlotText(3),
           getSlotText(4),
-          '||',
+          'LUNCH BREAK',
           getSlotText(5),
           getSlotText(6),
           getSlotText(7)
-        ]);
+        ]));
       });
 
-      rows.push([]);
-      rows.push(['--- SUBJECT REFERENCE LEGEND ---']);
-      rows.push(['Subject Code', 'Subject Title', 'Faculty Name', 'Faculty Code', 'Weekly Hours', 'Type']);
+      rows.push(padRow([]));
+
+      // 2. Faculty Reference Legend Section
+      rows.push(padRow(['FACULTY AND SUBJECT REFERENCE LEGEND']));
+      rows.push(padRow([]));
+      rows.push(padRow([
+        'SUBJECT CODE',
+        'SUBJECT TITLE',
+        'FACULTY IN-CHARGE',
+        'FACULTY CODE',
+        'SESSION TYPE',
+        'WEEKLY HOURS'
+      ]));
 
       const seen = new Set();
       const legendRows = timetableEntries
@@ -932,21 +1046,36 @@ export default function AdminTimetable() {
 
       legendRows.forEach(e => {
         const sub = subjects.find(s => String(s.id) === String(e.subject_id)) || {};
-        rows.push([
-          e.subject_code || '',
+        const facInfo = resolveFacultyInfo(sub || e);
+        const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub.is_lab);
+        const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
+        const sessionTypeStr = isLab ? 'Laboratory' : isBlock ? 'Block Theory' : (e.session_type === 'activity' ? 'Activity' : 'Theory');
+
+        rows.push(padRow([
+          e.subject_code || sub.code || '',
           e.subject_name || sub.name || '',
-          e.faculty_name || sub.faculty_name || '—',
-          e.faculty_code || sub.faculty_code || '—',
-          sub.weekly_hours || e.weekly_hours || '',
-          (e.is_lab || e.session_type === 'lab' || sub.is_lab) ? 'Laboratory' : 'Theory'
-        ]);
+          facInfo.name,
+          facInfo.code,
+          sessionTypeStr,
+          String(sub.weekly_hours || e.weekly_hours || '')
+        ]));
       });
 
-      rows.push([]);
-      rows.push(['Class Room', currentSemester?.class_room || 'LLH-01']);
-      rows.push(['Class Advisor', currentSemester?.class_advisor || '—']);
-      rows.push(['Mentors', currentSemester?.mentors || '—']);
+      rows.push(padRow([]));
 
+      // 3. Class Administration Details Section
+      rows.push(padRow(['CLASS ADMINISTRATION DETAILS']));
+      rows.push(padRow([]));
+      rows.push(padRow(['CLASS ROOM', currentSemester?.class_room || 'LLH-04']));
+      rows.push(padRow(['CLASS ADVISOR', currentSemester?.class_advisor || '—']));
+      rows.push(padRow(['MENTORS', currentSemester?.mentors || '—']));
+      rows.push(padRow([]));
+
+      // Footer
+      const todayStr = new Date().toLocaleDateString('en-GB');
+      rows.push(padRow([`Generated on ${todayStr} - Smart Timetable Scheduler`]));
+
+      // Build and trigger download
       const csvContent = '\uFEFF' + rows.map(r => r.map(escapeCSV).join(',')).join('\r\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -966,66 +1095,91 @@ export default function AdminTimetable() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Top Header & Semester Selector */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm">
-        {/* Semester Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider mr-1">Semester:</span>
-          {filteredSemesters.length === 0 ? (
-            <span className="text-xs text-slate-400 italic px-2">No semesters configured for this department</span>
-          ) : (
-            filteredSemesters.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => {
-                  setSelectedSemesterId(s.id);
-                  setAcademicYear(s.academic_year || '2025-2026');
-                  setLastAction(null);
-                }}
-                className={`px-4 py-2 text-sm font-bold rounded-lg transition-all flex items-center gap-2 ${String(selectedSemesterId) === String(s.id)
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-              >
-                <span>Semester {s.number} (S{s.number})</span>
-                <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${String(selectedSemesterId) === String(s.id) ? 'bg-orange-600 text-orange-100' : 'bg-slate-200 text-slate-600'
-                  }`}>
-                  {s.class_room}
-                </span>
-              </button>
-            ))
-          )}
+    <div className="space-y-5 pb-10">
+      {/* 1. Semester Controls & Action Bar */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
+        {/* Semester Switcher Segmented Control */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold tracking-wider text-slate-400 uppercase hidden lg:inline">Semester:</span>
+          <div className="flex items-center p-1 bg-slate-100 rounded-xl gap-1 overflow-x-auto">
+            {filteredSemesters.length === 0 ? (
+              <span className="text-xs text-slate-400 italic px-3 py-1.5">No semesters configured for this department</span>
+            ) : (
+              filteredSemesters.map((s) => {
+                const isActive = String(selectedSemesterId) === String(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedSemesterId(s.id);
+                      setAcademicYear(s.academic_year || '2025-2026');
+                      setLastAction(null);
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/60 font-medium'
+                    }`}
+                  >
+                    <span>Semester {s.number} <span className={isActive ? 'opacity-85 font-normal' : 'text-slate-400 font-normal'}>(S{s.number})</span></span>
+                    {s.class_room && (
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                        isActive ? 'bg-black/15 text-white font-bold' : 'bg-slate-200/70 text-slate-600 font-medium'
+                      }`}>
+                        {s.class_room}
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Permanent Undo Button — clickable only when an operation has been performed */}
+        {/* Action Group */}
+        <div className="flex items-center gap-2 ml-auto flex-wrap">
+          {/* Undo Button */}
           <button
             type="button"
             onClick={handleUndo}
             disabled={!lastAction || undoing}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg border transition-all ${lastAction && !undoing
-              ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100 hover:border-amber-400 shadow-sm cursor-pointer'
-              : 'border-slate-200 text-slate-300 bg-slate-50 cursor-not-allowed pointer-events-none'
-              }`}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border transition shadow-xs ${
+              lastAction && !undoing
+                ? 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 cursor-pointer'
+                : 'bg-slate-50 border-slate-200/60 text-slate-300 cursor-not-allowed pointer-events-none'
+            }`}
             title={lastAction ? `Undo: ${lastAction.description}` : 'No operations to undo'}
           >
             {undoing ? (
-              <Loader2 className="w-4 h-4 animate-spin text-amber-600" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
             ) : (
-              <RotateCcw className={`w-4 h-4 ${lastAction ? 'text-amber-700' : 'text-slate-300'}`} />
+              <RotateCcw className={`w-3.5 h-3.5 ${lastAction ? 'text-slate-600' : 'text-slate-300'}`} />
             )}
             <span>Undo</span>
             {lastAction && !undoing && (
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
             )}
           </button>
 
+          {/* Clear Button */}
           <button
+            type="button"
+            onClick={handleClearSemester}
+            disabled={timetableEntries.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-rose-600 bg-white hover:bg-rose-50/50 border border-slate-200 hover:border-rose-200 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+            title="Clear current semester entries"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Clear</span>
+          </button>
+
+          {/* Generate Timetable Hero CTA */}
+          <button
+            type="button"
             onClick={handleAutoGenerate}
             disabled={generating}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-lg shadow-sm disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 rounded-xl shadow-sm shadow-orange-500/20 disabled:opacity-50 transition cursor-pointer"
           >
             {generating ? (
               <>
@@ -1035,26 +1189,26 @@ export default function AdminTimetable() {
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>Generate Timetable (All Semesters)</span>
+                <span>Generate Timetable <span className="hidden sm:inline">(All Semesters)</span></span>
               </>
             )}
           </button>
 
-          {/* Export Dropdown Button (PDF & CSV) */}
+          {/* Export Dropdown */}
           <div className="relative" ref={exportDropdownRef}>
             <button
               type="button"
               onClick={() => setExportDropdownOpen(prev => !prev)}
               disabled={exporting || timetableEntries.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
             >
               {exporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
               ) : (
-                <Download className="w-4 h-4" />
+                <Download className="w-3.5 h-3.5 text-slate-500" />
               )}
               <span>Export</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-300 transition-transform ${exportDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${exportDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {exportDropdownOpen && (
@@ -1093,274 +1247,316 @@ export default function AdminTimetable() {
               </div>
             )}
           </div>
-
-          <button
-            onClick={handleClearSemester}
-            disabled={timetableEntries.length === 0}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-slate-300 text-slate-700 hover:text-rose-600 hover:bg-rose-50 text-sm font-medium rounded-lg transition-colors"
-            title="Clear current semester entries"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear
-          </button>
         </div>
-      </div>
+      </section>
 
-      {/* Timetable Grid Container (Exportable ref) */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6 overflow-hidden">
-        {/* Printable / View Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-900">
+      {/* 2. Schedule Header & Metadata Card */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Left: Title and Metadata */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
                 {activeDepartment ? `${activeDepartment.name} — ` : ''}Semester {currentSemester?.number || ''} Weekly Schedule
-              </h2>
+              </h1>
               {activeDepartment?.code && (
-                <span className="font-mono text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
+                <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/60 font-semibold text-[11px]">
                   {activeDepartment.code}
                 </span>
               )}
             </div>
-            <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-2.5">
-              <span>Room: <strong className="text-slate-800 font-mono">{currentSemester?.class_room || 'Not set'}</strong></span>
-              <span>•</span>
-              <span>Academic Year: <strong className="text-slate-800">{academicYear}</strong></span>
+
+            {/* Metadata Pill Badges */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-slate-600">
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-medium">Room:</span>
+                <span className="font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded font-mono">
+                  {currentSemester?.class_room || 'Not set'}
+                </span>
+              </div>
+              <span className="text-slate-300">•</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-400 font-medium">Academic Year:</span>
+                <span className="font-medium text-slate-700">{academicYear}</span>
+              </div>
               {currentSemester?.class_advisor && (
                 <>
-                  <span>•</span>
-                  <span>Advisor: <strong className="text-slate-800">{currentSemester.class_advisor}</strong></span>
+                  <span className="text-slate-300">•</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 font-medium">Advisor:</span>
+                    <span className="font-medium text-slate-700">{currentSemester.class_advisor}</span>
+                  </div>
                 </>
               )}
               {currentSemester?.mentors && (
                 <>
-                  <span>•</span>
-                  <span>Mentors: <strong className="text-slate-800">{currentSemester.mentors}</strong></span>
+                  <span className="text-slate-300">•</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400 font-medium">Mentors:</span>
+                    <span className="font-medium text-slate-700">{currentSemester.mentors}</span>
+                  </div>
                 </>
               )}
-              <span>•</span>
+              <span className="text-slate-300">•</span>
               <button
                 type="button"
                 onClick={handleOpenSemesterModal}
-                className="inline-flex items-center gap-1 text-orange-700 hover:text-orange-800 font-semibold hover:underline cursor-pointer text-xs"
+                className="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700 font-medium transition cursor-pointer"
                 title="Edit Classroom, Class Advisor, and Mentors"
               >
-                <Pencil className="w-3 h-3" />
+                <Pencil className="w-3.5 h-3.5" />
                 <span>Edit Details</span>
               </button>
-              <span>•</span>
-              <span className="text-orange-700 font-medium">{timetableEntries.length} periods scheduled</span>
             </div>
           </div>
 
-          <div className="hidden sm:flex items-center gap-4 text-xs text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-blue-100 border border-blue-300 inline-block" /> Theory
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-amber-100 border border-amber-300 inline-block" /> Lab
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-orange-100 border border-orange-300 inline-block" /> Block
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-teal-100 border border-teal-300 inline-block" /> Activity
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded bg-purple-100 border border-purple-300 inline-block" /> Parallel
-            </span>
+          {/* Right: Status & Legend */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 lg:border-l lg:border-slate-100 lg:pl-6">
+            {/* Periods Counter */}
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200/50">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <span>{timetableEntries.length} periods scheduled</span>
+            </div>
+
+            {/* Interactive Legend Pill Bar */}
+            <div className="flex items-center gap-2.5 text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200/60 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500 ring-2 ring-blue-100" />
+                <span className="font-medium">Theory</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-2 ring-amber-100" />
+                <span className="font-medium">Lab</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-400 ring-2 ring-orange-100" />
+                <span className="font-medium">Block</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-100" />
+                <span className="font-medium">Activity</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 ring-2 ring-purple-100" />
+                <span className="font-medium">Parallel</span>
+              </div>
+            </div>
           </div>
         </div>
+      </section>
 
-        {/* Weekly Grid */}
-        <div ref={gridRef} className="bg-white p-2">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-slate-300 text-center">
-              {/* Table Header: Days & Periods with Breaks */}
-              <thead>
-                <tr className="bg-slate-100 text-slate-800 text-xs font-bold uppercase tracking-wider">
-                  <th className="border border-slate-300 py-3 px-2 w-28 bg-slate-200">Day / Time</th>
+      {/* 3. Modern Timetable Grid Section */}
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col p-4 sm:p-5">
+        <div ref={gridRef} className="overflow-x-auto">
+          <table className="w-full min-w-[1280px] border-collapse text-left table-fixed">
+            {/* Column sizing */}
+            <colgroup>
+              <col className="w-28" />
+              <col className="w-44" />
+              <col className="w-44" />
+              <col className="w-16" />
+              <col className="w-44" />
+              <col className="w-44" />
+              <col className="w-16" />
+              <col className="w-44" />
+              <col className="w-44" />
+              <col className="w-44" />
+            </colgroup>
 
-                  {/* Period 1 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 1</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[1]}</div>
-                  </th>
+            {/* Table Header */}
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200/90 text-slate-700 divide-x divide-slate-200/60">
+                <th className="py-3 px-3 text-center text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100/60" scope="col">
+                  DAY / TIME
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 1</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[1]}</span>
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 2</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[2]}</span>
+                </th>
+                {/* Tea Break Header */}
+                <th className="py-2.5 px-1 text-center bg-amber-50/60 border-x border-amber-100" scope="col">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-xs">☕</span>
+                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-tighter mt-0.5">Tea</span>
+                    <span className="text-[9px] font-medium text-amber-600/80">10:50-11:10</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 3</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[3]}</span>
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 4</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[4]}</span>
+                </th>
+                {/* Lunch Break Header */}
+                <th className="py-2.5 px-1 text-center bg-orange-50/60 border-x border-orange-100" scope="col">
+                  <div className="flex flex-col items-center justify-center">
+                    <span className="text-xs">🍽️</span>
+                    <span className="text-[10px] font-bold text-orange-800 uppercase tracking-tighter mt-0.5">Lunch</span>
+                    <span className="text-[9px] font-medium text-orange-600/80">13:00-13:50</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 5</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[5]}</span>
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 6</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[6]}</span>
+                </th>
+                <th className="py-2.5 px-3 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 7</span>
+                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[7]}</span>
+                </th>
+              </tr>
+            </thead>
 
-                  {/* Period 2 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 2</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[2]}</div>
-                  </th>
+            {/* Table Body with Grid Slots */}
+            <tbody className="divide-y divide-slate-200">
+              {DAYS.map((day) => {
+                const getMergeableSlot = (p) => {
+                  const es = gridMap.get(`${day}_${p}`) || [];
+                  if (es.length !== 1) return null;
+                  const e = es[0];
+                  const sub = subjects.find(s => String(s.id) === String(e.subject_id));
+                  const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub?.is_lab);
+                  const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
+                  if (isLab || isBlock) {
+                    return { ...e, is_lab: isLab, is_block: isBlock };
+                  }
+                  return null;
+                };
 
-                  {/* Tea Break Column */}
-                  <th className="border border-slate-300 py-2 px-1 w-12 bg-amber-50/70 text-amber-800 font-semibold text-[11px]">
-                    <div className="flex flex-col items-center justify-center gap-0.5">
-                      <Coffee className="w-3.5 h-3.5 text-amber-700" />
-                      <span className="writing-vertical text-[10px] tracking-tight">Tea Break</span>
-                      <span className="text-[9px] font-mono">10:50-11:10</span>
-                    </div>
-                  </th>
+                const { mergeMap, skipPeriods } = computeLabMerges(getMergeableSlot);
 
-                  {/* Period 3 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 3</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[3]}</div>
-                  </th>
-
-                  {/* Period 4 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 4</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[4]}</div>
-                  </th>
-
-                  {/* Lunch Break Column */}
-                  <th className="border border-slate-300 py-2 px-1 w-12 bg-amber-50/70 text-amber-800 font-semibold text-[11px]">
-                    <div className="flex flex-col items-center justify-center gap-0.5">
-                      <Utensils className="w-3.5 h-3.5 text-amber-700" />
-                      <span className="writing-vertical text-[10px] tracking-tight">Lunch Break</span>
-                      <span className="text-[9px] font-mono">13:00-13:50</span>
-                    </div>
-                  </th>
-
-                  {/* Period 5 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 5</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[5]}</div>
-                  </th>
-
-                  {/* Period 6 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 6</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[6]}</div>
-                  </th>
-
-                  {/* Period 7 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 7</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[7]}</div>
-                  </th>
-                </tr>
-              </thead>
-
-              {/* Grid Rows for Each Day (Monday - Saturday) */}
-              <tbody>
-                {DAYS.map((day) => {
-                  // ── Lab Block Merge Logic ──────────────────────────────────────
-                  const isLabSlot = (p) => {
-                    const es = gridMap.get(`${day}_${p}`) || [];
-                    if (es.length !== 1) return null;
-                    const e = es[0];
-                    return (e.session_type === 'lab' || e.is_lab) ? e : null;
-                  };
-
-                  const { mergeMap, skipPeriods } = computeLabMerges(isLabSlot);
-
-                  // Helper to render one period <td> (handles merge start, merge skip, normal)
-                  const renderPeriodTd = (p) => {
-                    if (skipPeriods.has(p)) return null; // consumed by the preceding merged cell
-                    const mergeInfo = mergeMap.get(p);
-                    const isDragOver = dragOverKey === `${day}_${p}`;
-                    return (
-                      <td
-                        key={p}
-                        colSpan={mergeInfo ? mergeInfo.span : 1}
-                        onClick={() => handleSlotClick(day, p)}
-                        onDragOver={(e) => handleDragOver(e, day, p)}
-                        onDragLeave={handleDragLeave}
-                        onDrop={(e) => handleDrop(e, day, p)}
-                        className={`border border-slate-300 p-1.5 transition-colors cursor-pointer ${
-                          isDragOver ? 'bg-orange-100 border-orange-400 border-2' : 'hover:bg-orange-50/50'
-                        }`}
-                      >
-                        {mergeInfo ? (
-                          <MergedLabCell
-                            entry={(gridMap.get(`${day}_${p}`) || [])[0]}
-                            timeRange={mergeInfo.timeRange}
-                            span={mergeInfo.span}
-                            onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
-                          />
-                        ) : (
-                          <SlotCell
-                            entries={gridMap.get(`${day}_${p}`)}
-                            onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
-                          />
-                        )}
-                      </td>
-                    );
-                  };
-                  // ── End Lab Block Merge Logic ──────────────────────────────────
-
+                const renderPeriodTd = (p) => {
+                  if (skipPeriods.has(p)) return null;
+                  const mergeInfo = mergeMap.get(p);
+                  const isDragOver = dragOverKey === `${day}_${p}`;
                   return (
-                    <tr key={day} className="h-20">
-                      {/* Day Name */}
-                      <td className="border border-slate-300 bg-slate-50 font-bold text-slate-900 text-xs px-2 py-3">
-                        {day}
-                      </td>
-
-                      {renderPeriodTd(1)}
-                      {renderPeriodTd(2)}
-
-                      {/* Tea Break Cell */}
-                      <td className="border border-slate-300 bg-amber-50/40 text-amber-700 text-[10px] font-medium p-1">
-                        <div className="h-full flex items-center justify-center text-slate-400 font-mono">||</div>
-                      </td>
-
-                      {renderPeriodTd(3)}
-                      {renderPeriodTd(4)}
-
-                      {/* Lunch Break Cell */}
-                      <td className="border border-slate-300 bg-amber-50/40 text-amber-700 text-[10px] font-medium p-1">
-                        <div className="h-full flex items-center justify-center text-slate-400 font-mono">||</div>
-                      </td>
-
-                      {renderPeriodTd(5)}
-                      {renderPeriodTd(6)}
-                      {renderPeriodTd(7)}
-                    </tr>
+                    <td
+                      key={p}
+                      colSpan={mergeInfo ? mergeInfo.span : 1}
+                      onClick={() => handleSlotClick(day, p)}
+                      onDragOver={(e) => handleDragOver(e, day, p)}
+                      onDragLeave={handleDragLeave}
+                      onDrop={(e) => handleDrop(e, day, p)}
+                      className={`p-2 border-r border-slate-200 transition-colors cursor-pointer ${
+                        isDragOver ? 'bg-orange-100/70 ring-2 ring-orange-400 ring-inset' : 'hover:bg-slate-50/60'
+                      }`}
+                    >
+                      {mergeInfo ? (
+                        <MergedLabCell
+                          entry={(gridMap.get(`${day}_${p}`) || [])[0]}
+                          timeRange={mergeInfo.timeRange}
+                          span={mergeInfo.span}
+                          onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
+                        />
+                      ) : (
+                        <SlotCell
+                          entries={gridMap.get(`${day}_${p}`)}
+                          onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
+                        />
+                      )}
+                    </td>
                   );
-                })}
-              </tbody>
-            </table>
-          </div>
+                };
 
-          {/* ── Subject Legend Table (below grid, part of PDF export) ── */}
-          {timetableEntries.length > 0 && (() => {
-            // Deduplicate subjects that appear in this semester's timetable
-            const seen = new Set();
-            const legendRows = timetableEntries
-              .filter(e => { if (seen.has(e.subject_code)) return false; seen.add(e.subject_code); return true; })
-              .sort((a, b) => a.subject_code.localeCompare(b.subject_code));
-            return (
-              <div className="mt-6 border-t border-slate-200 pt-4">
-                <table className="w-full border-collapse border border-slate-300 text-sm">
+                return (
+                  <tr key={day} className="hover:bg-slate-50/40 transition-colors">
+                    {/* Day Name */}
+                    <td className="px-3 py-3 font-semibold text-xs text-slate-700 text-center bg-slate-50/70 border-r border-slate-200">
+                      {day}
+                    </td>
+
+                    {renderPeriodTd(1)}
+                    {renderPeriodTd(2)}
+
+                    {/* Tea Break Separator Strip */}
+                    <td className="bg-amber-50/20 text-center border-r border-amber-100 py-1">
+                      <div className="flex flex-col items-center justify-center select-none gap-1">
+                        <span className="w-1 h-1 rounded-full bg-amber-300"></span>
+                        <span className="w-1 h-1 rounded-full bg-amber-300"></span>
+                        <span className="w-1 h-1 rounded-full bg-amber-300"></span>
+                      </div>
+                    </td>
+
+                    {renderPeriodTd(3)}
+                    {renderPeriodTd(4)}
+
+                    {/* Lunch Break Separator Strip */}
+                    <td className="bg-orange-50/20 text-center border-r border-orange-100 py-1">
+                      <div className="flex flex-col items-center justify-center select-none gap-1">
+                        <span className="w-1 h-1 rounded-full bg-orange-300"></span>
+                        <span className="w-1 h-1 rounded-full bg-orange-300"></span>
+                        <span className="w-1 h-1 rounded-full bg-orange-300"></span>
+                      </div>
+                    </td>
+
+                    {renderPeriodTd(5)}
+                    {renderPeriodTd(6)}
+                    {renderPeriodTd(7)}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Subject Reference Legend (below grid) ── */}
+        {timetableEntries.length > 0 && (() => {
+          const seen = new Set();
+          const legendRows = timetableEntries
+            .filter(e => { if (seen.has(e.subject_code)) return false; seen.add(e.subject_code); return true; })
+            .sort((a, b) => (a.subject_code || '').localeCompare(b.subject_code || ''));
+          return (
+            <div className="mt-6 border-t border-slate-200/80 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Subject & Faculty Reference</h3>
+                <span className="text-[11px] text-slate-400">{legendRows.length} subjects allocated</span>
+              </div>
+              <div className="rounded-xl border border-slate-200/80 overflow-hidden shadow-xs">
+                <table className="w-full border-collapse text-left text-xs">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-700 text-xs font-bold uppercase tracking-wider">
-                      <th className="border border-slate-300 px-3 py-2 text-left w-28">Subject Code</th>
-                      <th className="border border-slate-300 px-3 py-2 text-left">Subject Name</th>
-                      <th className="border border-slate-300 px-3 py-2 text-left">Faculty</th>
+                    <tr className="bg-slate-50 text-slate-700 font-semibold uppercase text-[11px] border-b border-slate-200">
+                      <th className="px-4 py-2.5 w-32 font-mono">Code</th>
+                      <th className="px-4 py-2.5">Subject Name</th>
+                      <th className="px-4 py-2.5 w-72">Faculty In-Charge</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {legendRows.map((entry) => (
-                      <tr key={entry.subject_code} className="even:bg-slate-50 hover:bg-orange-50/40 transition-colors">
-                        <td className="border border-slate-300 px-3 py-1.5 font-mono font-bold text-xs text-slate-800">
-                          {entry.subject_code}
-                        </td>
-                        <td className="border border-slate-300 px-3 py-1.5 text-xs text-slate-700">
-                          {entry.subject_name}
-                        </td>
-                        <td className="border border-slate-300 px-3 py-1.5 text-xs text-slate-600">
-                          {entry.faculty_name}
-                        </td>
-                      </tr>
-                    ))}
+                  <tbody className="divide-y divide-slate-100">
+                    {legendRows.map((entry) => {
+                      const sub = subjects.find(s => String(s.id) === String(entry.subject_id));
+                      const facInfo = resolveFacultyInfo(sub || entry);
+                      return (
+                        <tr key={entry.subject_code} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="px-4 py-2 font-mono font-bold text-slate-900">
+                            {entry.subject_code}
+                          </td>
+                          <td className="px-4 py-2 text-slate-700 font-medium">
+                            {entry.subject_name || sub?.name}
+                          </td>
+                          <td className="px-4 py-2 text-slate-600">
+                            <span>{facInfo.name}</span>
+                            {facInfo.code && (
+                              <span className="font-mono text-[10px] text-slate-400 ml-1.5">[{facInfo.code}]</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            );
-          })()}
-        </div>
-      </div>
+            </div>
+          );
+        })()}
+      </section>
 
       {/* Moving slot spinner overlay */}
       {movingSlot && (
@@ -1752,133 +1948,145 @@ export default function AdminTimetable() {
         }}
         className="p-5 bg-white text-slate-900 border-2 border-slate-900 box-border"
       >
-        {/* 1. Official Header */}
-        <div className="flex items-center justify-between border-b-2 border-slate-900 pb-1.5 mb-1.5">
-          <div className="w-28 text-center flex flex-col items-center">
-            <div className="border-2 border-slate-900 px-3 py-1 font-serif font-black text-sm tracking-wider inline-block">
-              YIT
-            </div>
-            <span className="text-[7px] font-extrabold tracking-widest text-slate-700 mt-0.5">YENEPOYA</span>
+        {/* 1. Official Centered Header Block */}
+        <div className="text-center border-b-2 border-slate-900 pb-2 mb-2 relative">
+          <div className="absolute left-1 top-0 border-2 border-slate-900 px-3 py-1 font-serif font-black text-sm tracking-wider">
+            YIT
           </div>
-          <div className="flex-1 text-center px-4">
-            <h1 className="text-[16px] font-black tracking-wide uppercase font-serif text-slate-900 leading-tight">
-              Yenepoya Institute of Technology
-            </h1>
-            <p className="text-[9px] text-slate-600 font-medium tracking-normal">
-              NH-13, Thodar, Moodbidri, Mangalore, Karnataka - 574225
-            </p>
-            <p className="text-[11px] font-bold text-slate-800 mt-0.5">
-              Department of {activeDepartment?.name || 'Computer Science and Engineering'}
-            </p>
-            <div className="inline-block bg-slate-100 border border-slate-300 rounded px-2 py-0.5 mt-0.5">
-              <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-slate-900">
-                Class Time Table • {((currentSemester?.number || 1) % 2 === 1) ? 'Odd' : 'Even'} Semester (AY {academicYear})
-              </span>
+          {activeDepartment?.code && (
+            <div className="absolute right-1 top-0 border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[9.5px] font-bold uppercase">
+              DEPT: {activeDepartment.code}
             </div>
-          </div>
-          <div className="w-28 text-right flex flex-col items-end">
-            {activeDepartment?.code && (
-              <span className="border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[9.5px] font-extrabold uppercase">
-                DEPT: {activeDepartment.code}
-              </span>
-            )}
-            <span className="text-[7.5px] font-mono text-slate-500 mt-0.5">Single Page Official</span>
+          )}
+          <h1 className="text-[17px] font-black tracking-wide uppercase font-serif text-slate-950 leading-tight">
+            Yenepoya Institute of Technology
+          </h1>
+          <p className="text-[9px] text-slate-600 font-medium tracking-normal">
+            NH-13, Thodar, Moodbidri, Mangalore, Karnataka - 574225
+          </p>
+          <p className="text-[12px] font-extrabold text-slate-900 mt-0.5">
+            Department of {activeDepartment?.name || 'Computer Science and Engineering'}
+          </p>
+          <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-800 mt-0.5">
+            AY {academicYear} • {((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN'} SEMESTER
           </div>
         </div>
 
-        {/* 2. Metadata Sub-Header */}
-        <div className="grid grid-cols-3 border border-slate-800 text-[10px] font-bold uppercase mb-1.5 text-center py-0.5 bg-slate-100/70">
-          <div className="border-r border-slate-800 px-2 flex items-center justify-center gap-1">
-            <span className="text-slate-500 font-medium">Class:</span>
-            <span>{(() => {
-              const ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII' };
-              const r = currentSemester ? ROMAN[currentSemester.number] : null;
-              return r ? `${r} Semester` : `Semester ${currentSemester?.number || ''}`;
-            })()}</span>
+        {/* 2. Class-Info Bar */}
+        <div className="border border-slate-800 text-[10px] font-bold uppercase mb-2 text-center py-1 bg-slate-50 flex items-center justify-center divide-x divide-slate-800">
+          <div className="px-5">
+            <span className="text-slate-600 font-semibold mr-1">CLASS:</span>
+            <span className="text-slate-950 font-black">{romanSemester} SEMESTER</span>
           </div>
-          <div className="border-r border-slate-800 px-2 flex items-center justify-center gap-1">
-            <span className="text-slate-500 font-medium">Class Room:</span>
-            <span>{currentSemester?.class_room || 'LLH-01'}</span>
+          <div className="px-5">
+            <span className="text-slate-600 font-semibold mr-1">CLASS ROOM:</span>
+            <span className="text-slate-950 font-black">{currentSemester?.class_room || 'LLH-04'}</span>
           </div>
-          <div className="px-2 flex items-center justify-center gap-1">
-            <span className="text-slate-500 font-medium">W.E.F:</span>
-            <span>{currentSemester?.academic_year || academicYear}</span>
+          <div className="px-5">
+            <span className="text-slate-600 font-semibold mr-1">W.E.F:</span>
+            <span className="text-slate-950 font-black">{wefDate}</span>
           </div>
         </div>
 
-        {/* 3. Timetable Grid */}
-        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2 table-fixed">
-          <thead>
-            <tr className="bg-slate-100 text-slate-900 font-bold text-[9px] uppercase">
-              <th className="border border-slate-800 py-1 px-1 w-[80px]">Day \ Time</th>
+        {/* 3. Official Timetable Grid */}
+        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2.5 table-fixed">
+          <thead className="bg-slate-100">
+            <tr className="text-slate-900 font-bold text-[9px] uppercase">
+              <th className="border border-slate-800 py-1 px-1 w-[80px]">DAY \ PERIOD</th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>09:00AM - 09:55AM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 1</div>
+                <div>PERIOD 1</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">09:00 - 09:55</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>09:55AM - 10:50AM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 2</div>
+                <div>PERIOD 2</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">09:55 - 10:50</div>
               </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[26px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
+              <th className="border border-slate-800 py-1 px-0.5 w-[24px] text-[7.5px] bg-slate-200/80 text-slate-800 font-extrabold">
                 TEA
               </th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>11:10AM - 12:05PM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 3</div>
+                <div>PERIOD 3</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">11:10 - 12:05</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>12:05PM - 01:00PM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 4</div>
+                <div>PERIOD 4</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">12:05 - 13:00</div>
               </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[26px] text-[7.5px] bg-amber-50/70 text-amber-900 font-bold">
+              <th className="border border-slate-800 py-1 px-0.5 w-[24px] text-[7.5px] bg-slate-200/80 text-slate-800 font-extrabold">
                 LUNCH
               </th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>01:50PM - 02:40PM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 5</div>
+                <div>PERIOD 5</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">13:50 - 14:40</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>02:40PM - 03:30PM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 6</div>
+                <div>PERIOD 6</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">14:40 - 15:30</div>
               </th>
               <th className="border border-slate-800 py-1 px-1">
-                <div>03:30PM - 04:15PM</div>
-                <div className="text-[8px] font-normal font-mono text-slate-600">Period 7</div>
+                <div>PERIOD 7</div>
+                <div className="text-[7.5px] font-mono font-normal text-slate-600">15:30 - 16:15</div>
               </th>
             </tr>
           </thead>
           <tbody>
             {DAYS.map((day, dIdx) => {
-              const isLabSlot = (p) => {
+              const getMergeableSlot = (p) => {
                 const es = gridMap.get(`${day}_${p}`) || [];
                 if (es.length !== 1) return null;
                 const e = es[0];
-                return (e.session_type === 'lab' || e.is_lab) ? e : null;
+                const sub = subjects.find(s => String(s.id) === String(e.subject_id));
+                const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub?.is_lab);
+                const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
+                if (isLab || isBlock) {
+                  return { ...e, is_lab: isLab, is_block: isBlock };
+                }
+                return null;
               };
-              const { mergeMap, skipPeriods } = computeLabMerges(isLabSlot);
+
+              const { mergeMap, skipPeriods } = computeLabMerges(getMergeableSlot);
 
               const renderPrintCell = (items) => {
                 if (!items || items.length === 0) return <span className="text-slate-300 font-mono text-[10px]">—</span>;
                 if (items.length === 1) {
                   const it = items[0];
+                  const sub = subjects.find(s => String(s.id) === String(it.subject_id));
+                  const fac = resolveFacultyInfo(sub || it);
+                  const isLab = Boolean(it.is_lab || it.session_type === 'lab' || sub?.is_lab);
+                  const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || it.session_type === 'block');
+
                   return (
                     <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
-                      <span className="font-mono font-bold text-[11px] text-slate-900 tracking-tight">{it.subject_code}</span>
-                      {(it.is_lab || it.session_type === 'lab') ? (
-                        <span className="text-[7.5px] font-mono font-bold text-slate-700 mt-0.5">[LAB]</span>
+                      <span className="font-mono font-bold text-[11px] text-slate-950 tracking-tight">{it.subject_code}</span>
+                      {fac.code && (
+                        <span className="text-[7.5px] font-mono text-slate-600">[{fac.code}]</span>
+                      )}
+                      {isLab ? (
+                        <span className="text-[7px] font-mono font-bold text-slate-700 mt-0.5">[LAB]</span>
+                      ) : isBlock ? (
+                        <span className="text-[7px] font-mono font-bold text-slate-700 mt-0.5">[BLOCK]</span>
                       ) : it.session_type === 'activity' ? (
-                        <span className="text-[7.5px] font-mono font-semibold text-slate-600 mt-0.5">[ACT]</span>
+                        <span className="text-[7px] font-mono font-semibold text-slate-600 mt-0.5">[ACT]</span>
                       ) : null}
                     </div>
                   );
                 }
+
+                // Parallel activities (NSS/PE): stacked slots within the cell, not overlapping, with subject code & faculty code
                 return (
                   <div className="h-full flex flex-col items-center justify-center gap-0.5 py-0.5 leading-tight">
-                    {items.map((it, idx) => (
-                      <div key={idx} className={idx > 0 ? "border-t border-slate-300 pt-0.5 w-full text-center" : ""}>
-                        <span className="font-mono font-bold text-[9.5px] text-slate-900">{it.subject_code}</span>
-                      </div>
-                    ))}
+                    {items.map((it, idx) => {
+                      const sub = subjects.find(s => String(s.id) === String(it.subject_id));
+                      const fac = resolveFacultyInfo(sub || it);
+                      return (
+                        <div key={idx} className={idx > 0 ? "border-t border-slate-300 pt-0.5 w-full text-center" : "w-full text-center"}>
+                          <span className="font-mono font-bold text-[9px] text-slate-950">{it.subject_code}</span>
+                          {fac.code && (
+                            <span className="text-[7.5px] font-mono font-semibold text-slate-600 ml-1">[{fac.code}]</span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               };
@@ -1887,14 +2095,21 @@ export default function AdminTimetable() {
                 if (skipPeriods.has(p)) return null;
                 const mergeInfo = mergeMap.get(p);
                 const items = gridMap.get(`${day}_${p}`) || [];
+
                 if (mergeInfo) {
                   const entry = items[0];
+                  const sub = subjects.find(s => String(s.id) === String(entry?.subject_id));
+                  const fac = resolveFacultyInfo(sub || entry);
+
                   return (
                     <td key={p} colSpan={mergeInfo.span} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 text-center align-middle">
                       <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
-                        <span className="font-mono font-bold text-[11.5px] text-slate-900 tracking-tight">{entry?.subject_code}</span>
-                        <span className="text-[8px] font-mono font-bold text-slate-700 uppercase tracking-wide mt-0.5">
-                          [LAB • {mergeInfo.span}H]
+                        <span className="font-mono font-bold text-[11.5px] text-slate-950 tracking-tight">{entry?.subject_code}</span>
+                        {fac.code && (
+                          <span className="text-[8px] font-mono font-semibold text-slate-600">[{fac.code}]</span>
+                        )}
+                        <span className="text-[8px] font-mono font-bold text-slate-800 uppercase tracking-wide mt-0.5">
+                          {mergeInfo.tag}
                         </span>
                         <span className="text-[7.5px] font-mono text-slate-500">
                           {mergeInfo.timeRange}
@@ -1903,8 +2118,9 @@ export default function AdminTimetable() {
                     </td>
                   );
                 }
+
                 return (
-                  <td key={p} className="border border-slate-800 p-1 align-middle">
+                  <td key={p} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 align-middle">
                     {renderPrintCell(items)}
                   </td>
                 );
@@ -1912,7 +2128,7 @@ export default function AdminTimetable() {
 
               return (
                 <tr key={day} className="h-9">
-                  <td className="border border-slate-800 bg-slate-100/60 font-bold text-slate-900 text-[10px] uppercase tracking-wider py-0.5 px-1 align-middle">
+                  <td className="border border-slate-800 bg-slate-100/70 font-bold text-slate-950 text-[10px] uppercase tracking-wider py-0.5 px-1 align-middle">
                     {day}
                   </td>
 
@@ -1922,12 +2138,12 @@ export default function AdminTimetable() {
 
                   {/* Tea Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-slate-50 text-center py-1 px-0.5 w-[26px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-extrabold text-[7.5px] tracking-widest text-slate-800 leading-tight">
+                    <td rowSpan={6} className="border border-slate-800 bg-slate-100 text-center py-1 px-0.5 w-[24px] align-middle">
+                      <div className="flex flex-col items-center justify-center font-bold text-[7.5px] tracking-widest text-slate-700 leading-tight">
                         <span>T</span>
                         <span>E</span>
                         <span>A</span>
-                        <span className="my-0.5 text-[5px] text-slate-600">•</span>
+                        <span className="my-0.5 text-[5px] text-slate-500">•</span>
                         <span>B</span>
                         <span>R</span>
                         <span>E</span>
@@ -1943,14 +2159,14 @@ export default function AdminTimetable() {
 
                   {/* Lunch Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-slate-50 text-center py-1 px-0.5 w-[26px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-extrabold text-[7.5px] tracking-widest text-slate-800 leading-tight">
+                    <td rowSpan={6} className="border border-slate-800 bg-slate-100 text-center py-1 px-0.5 w-[24px] align-middle">
+                      <div className="flex flex-col items-center justify-center font-bold text-[7.5px] tracking-widest text-slate-700 leading-tight">
                         <span>L</span>
                         <span>U</span>
                         <span>N</span>
                         <span>C</span>
                         <span>H</span>
-                        <span className="my-0.5 text-[5px] text-slate-600">•</span>
+                        <span className="my-0.5 text-[5px] text-slate-500">•</span>
                         <span>B</span>
                         <span>R</span>
                         <span>E</span>
@@ -1970,7 +2186,7 @@ export default function AdminTimetable() {
           </tbody>
         </table>
 
-        {/* 4. Subject Legend Table */}
+        {/* 4. Faculty Legend Table (2-Column Format Sorted by Subject Code Ascending) */}
         {(() => {
           const seen = new Set();
           const printLegend = timetableEntries
@@ -1979,42 +2195,48 @@ export default function AdminTimetable() {
               seen.add(e.subject_code);
               return true;
             })
-            .sort((a, b) => a.subject_code.localeCompare(b.subject_code));
+            .sort((a, b) => (a.subject_code || '').localeCompare(b.subject_code || ''));
 
           const advisor = currentSemester?.class_advisor || '—';
           const mentors = currentSemester?.mentors || '—';
 
           return (
-            <div className="border border-slate-800 mb-2 text-xs">
+            <div className="border border-slate-800 mb-2.5 text-xs">
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="bg-slate-100 text-slate-900 font-bold text-[9px] uppercase border-b border-slate-800">
-                    <th className="border-r border-slate-800 px-2.5 py-0.5 w-32 font-mono">Subject Code</th>
-                    <th className="border-r border-slate-800 px-2.5 py-0.5">Subject Title</th>
-                    <th className="px-2.5 py-0.5 w-72">Faculty In-Charge</th>
+                    <th className="border-r border-slate-800 px-3 py-1">Subject Code & Title</th>
+                    <th className="px-3 py-1 w-72">Faculty In-Charge</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {printLegend.map((it, idx) => (
-                    <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[9.5px]">
-                      <td className="border-r border-slate-800 px-2.5 py-0.5 font-mono font-bold text-slate-900">
-                        {it.subject_code}
-                      </td>
-                      <td className="border-r border-slate-800 px-2.5 py-0.5 text-slate-800 font-medium">
-                        {it.subject_name}
-                      </td>
-                      <td className="px-2.5 py-0.5 text-slate-800 font-medium">
-                        {it.faculty_name || '—'}
-                      </td>
-                    </tr>
-                  ))}
+                  {printLegend.map((it, idx) => {
+                    const sub = subjects.find(s => String(s.id) === String(it.subject_id));
+                    const facInfo = resolveFacultyInfo(sub || it);
+                    return (
+                      <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[9.5px]">
+                        <td className="border-r border-slate-800 px-3 py-0.5 text-slate-900">
+                          <span className="font-mono font-bold text-slate-950 mr-2">{it.subject_code}</span>
+                          <span className="text-slate-800 font-medium">{it.subject_name || sub?.name}</span>
+                        </td>
+                        <td className="px-3 py-0.5 text-slate-900 font-medium">
+                          <span>{facInfo.name}</span>
+                          {facInfo.code && (
+                            <span className="font-mono text-[8.5px] text-slate-600 font-normal ml-1.5">[{facInfo.code}]</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {/* Advisor and Mentors footer row */}
                   <tr className="bg-slate-100/70 border-t border-slate-800 font-semibold text-[9.5px] text-slate-900">
-                    <td colSpan={2} className="border-r border-slate-800 px-2.5 py-0.5">
-                      <strong className="text-slate-900 font-bold">Class Advisor:</strong> <span className="text-slate-800 font-medium">{advisor}</span>
+                    <td className="border-r border-slate-800 px-3 py-1">
+                      <strong className="text-slate-950 font-bold">Class Advisor:</strong>{' '}
+                      <span className="text-slate-800 font-medium">{advisor}</span>
                     </td>
-                    <td className="px-2.5 py-0.5">
-                      <strong className="text-slate-900 font-bold">Mentors:</strong> <span className="text-slate-800 font-medium">{mentors}</span>
+                    <td className="px-3 py-1">
+                      <strong className="text-slate-950 font-bold">Mentors:</strong>{' '}
+                      <span className="text-slate-800 font-medium">{mentors}</span>
                     </td>
                   </tr>
                 </tbody>
@@ -2023,22 +2245,22 @@ export default function AdminTimetable() {
           );
         })()}
 
-        {/* 5. Signatures Footer */}
-        <div className="grid grid-cols-3 text-center text-[11px] font-bold pt-2">
+        {/* 5. Institutional Signatures Footer */}
+        <div className="grid grid-cols-3 text-center text-[10.5px] font-bold pt-1.5">
           <div>
-            <div className="h-5" />
+            <div className="h-4" />
             <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
               Time Table Coordinator
             </div>
           </div>
           <div>
-            <div className="h-5" />
+            <div className="h-4" />
             <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              Head of the Department
+              Head of Department
             </div>
           </div>
           <div>
-            <div className="h-5" />
+            <div className="h-4" />
             <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
               <div>Principal</div>
               <div className="text-[7px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
@@ -2055,55 +2277,66 @@ export default function AdminTimetable() {
 
 // Session type styling config
 const SESSION_STYLES = {
-  theory: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-950', badge: 'bg-blue-200 text-blue-800', label: null },
-  lab: { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-950', badge: 'bg-amber-200 text-amber-800', label: 'LAB' },
-  block: { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-950', badge: 'bg-orange-200 text-orange-800', label: 'BLOCK' },
-  activity: { bg: 'bg-teal-50', border: 'border-teal-200', text: 'text-teal-950', badge: 'bg-teal-200 text-teal-800', label: 'ACT' },
+  theory: { bg: 'bg-blue-50/50 hover:bg-blue-50/80', border: 'border-blue-200/80', text: 'text-blue-950', badge: 'bg-blue-100 text-blue-800', label: 'Theory' },
+  lab: { bg: 'bg-amber-50/60 hover:bg-amber-50', border: 'border-amber-200', text: 'text-amber-950', badge: 'bg-amber-200/70 text-amber-900', label: 'LAB' },
+  block: { bg: 'bg-orange-50/60 hover:bg-orange-50', border: 'border-orange-200', text: 'text-orange-950', badge: 'bg-orange-200/70 text-orange-900', label: 'BLOCK' },
+  activity: { bg: 'bg-emerald-50/50 hover:bg-emerald-50', border: 'border-emerald-200', text: 'text-emerald-950', badge: 'bg-emerald-100 text-emerald-800', label: 'ACT' },
 };
 
-// Merged Lab Cell — rendered when 2 or 3 consecutive periods share the same lab subject.
-// Spans 2 or 3 columns (colSpan=2 or colSpan=3) with a wider layout showing subject code, faculty, time range.
+// Merged Lab Cell — rendered when 2 or 3 consecutive periods share the same lab/block subject.
 function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
   if (!entry) {
     return (
-      <div className="h-full min-h-[58px] flex items-center justify-center">
-        <span className="text-[11px] font-mono text-slate-300">+ Free</span>
+      <div className="h-20 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-medium transition-colors">
+        + Free
       </div>
     );
   }
+
+  const isLab = Boolean(entry.is_lab || entry.session_type === 'lab');
+  const cardBg = isLab
+    ? 'bg-amber-50/60 hover:bg-amber-50 border-amber-200'
+    : 'bg-orange-50/60 hover:bg-orange-50 border-orange-200';
+  const textCode = isLab ? 'text-amber-950' : 'text-orange-950';
+  const textFac = isLab ? 'text-amber-800/80' : 'text-orange-800/80';
+  const badgeBg = isLab ? 'bg-amber-200/70 text-amber-900' : 'bg-orange-200/70 text-orange-900';
+  const hoursBg = isLab ? 'bg-amber-100 text-amber-800' : 'bg-orange-100 text-orange-800';
+  const labelText = isLab ? 'LAB' : 'BLOCK';
+
   return (
     <div
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className="h-full min-h-[58px] px-3 py-2 rounded-md flex items-center justify-between border shadow-xs cursor-grab active:cursor-grabbing active:opacity-60 transition-opacity select-none bg-amber-50 border-amber-300 text-amber-950"
+      className={`group relative h-20 border rounded-xl p-2.5 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${cardBg}`}
     >
-      <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="font-mono font-bold text-xs tracking-tight">{entry.subject_code}</span>
-        {entry.faculty_name && (
-          <span className="text-[10px] text-amber-700 truncate">{entry.faculty_name}</span>
-        )}
-        {timeRange && (
-          <span className="text-[9px] font-mono text-amber-500">{timeRange}</span>
-        )}
+      <div className="flex items-start justify-between gap-1.5">
+        <div className="min-w-0 flex-1">
+          <span className={`font-bold text-xs ${textCode} block truncate tracking-tight`}>{entry.subject_code}</span>
+          {entry.faculty_name && (
+            <span className={`text-[11px] font-medium ${textFac} truncate block mt-0.5`}>{entry.faculty_name}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] uppercase ${badgeBg}`}>{labelText}</span>
+          <span className={`px-1.5 py-0.5 rounded font-semibold text-[9px] ${hoursBg}`}>{span}h</span>
+        </div>
       </div>
-      <div className="flex flex-col items-end gap-1 ml-2 flex-shrink-0">
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-800 uppercase">LAB</span>
-        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-300 text-amber-900">{span}h</span>
+      <div className="text-[10px] font-medium text-slate-500 font-mono">
+        {timeRange}
       </div>
     </div>
   );
 }
 
-// Compact Slot Renderer — shows subject code + session badge only.
-// Full details (name, faculty) are in the legend table below the grid.
+// Compact Slot Renderer — shows subject code, faculty, session badge & duration.
 function SlotCell({ entries, onDragStart }) {
   const items = Array.isArray(entries) ? entries : (entries ? [entries] : []);
 
   if (items.length === 0) {
     return (
-      <div className="h-full min-h-[58px] flex items-center justify-center">
-        <span className="text-[11px] font-mono text-slate-300">+ Free</span>
+      <div className="h-20 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-500 text-xs font-medium transition-colors">
+        + Free
       </div>
     );
   }
@@ -2111,17 +2344,17 @@ function SlotCell({ entries, onDragStart }) {
   // Multiple occupants in same slot = parallel activities (NSS/PE split)
   if (items.length > 1) {
     return (
-      <div className="h-full min-h-[58px] flex flex-col justify-between gap-1 p-0.5">
+      <div className="h-20 bg-purple-50/60 hover:bg-purple-50 border border-purple-200 rounded-xl p-1.5 flex flex-col justify-around transition shadow-xs hover:shadow">
         {items.map((entry, idx) => (
           <div
             key={entry.id || idx}
             draggable
             onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 flex items-center justify-between px-1.5 py-1 rounded bg-purple-50 border border-purple-200 cursor-grab active:cursor-grabbing active:opacity-60 transition-opacity"
+            className="flex items-center justify-between px-2 py-1 bg-white/80 rounded-lg border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition"
           >
             <span className="font-mono font-bold text-[11px] text-purple-900">{entry.subject_code}</span>
-            <span className="text-[8px] font-bold bg-purple-200 text-purple-800 px-1 rounded">PAR</span>
+            <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1 rounded">PAR</span>
           </div>
         ))}
       </div>
@@ -2137,14 +2370,18 @@ function SlotCell({ entries, onDragStart }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className={`h-full min-h-[58px] px-2 py-1.5 rounded-md flex items-center justify-between border shadow-xs cursor-grab active:cursor-grabbing active:opacity-60 transition-opacity select-none ${style.bg} ${style.border} ${style.text}`}
+      className={`h-20 border rounded-xl p-2.5 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
     >
-      <span className="font-mono font-bold text-xs tracking-tight">{entry.subject_code}</span>
-      {style.label && (
-        <span className={`text-[9px] font-bold uppercase px-1 py-0.5 rounded ${style.badge}`}>
-          {style.label}
-        </span>
-      )}
+      <div>
+        <span className="font-bold text-xs tracking-tight block">{entry.subject_code}</span>
+        {entry.faculty_name && (
+          <span className="text-[10.5px] font-normal text-slate-600 truncate block mt-0.5">{entry.faculty_name}</span>
+        )}
+      </div>
+      <div className="flex items-center justify-between text-[10px] font-medium mt-1">
+        <span className="text-slate-500 capitalize">{sessionType}</span>
+        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>1h</span>
+      </div>
     </div>
   );
 }
