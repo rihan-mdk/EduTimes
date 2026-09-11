@@ -312,7 +312,6 @@ async function deleteTimetableEntry(req, res) {
 
 // 6. Auto-generate Timetable for Semesters (Backtracking Algorithm)
 async function autoGenerateTimetable(req, res) {
-  const client = await db.pool.connect();
   try {
     const { academic_year, overwrite = true, department_id } = req.body;
     if (!academic_year) {
@@ -339,13 +338,13 @@ async function autoGenerateTimetable(req, res) {
 
     semQuery += ' ORDER BY number ASC';
 
-    // Fetch semesters, subjects, timeslots, and existing entries of other departments
+    // Fetch semesters, subjects, timeslots, and existing entries safely via pool
     const [semestersRes, subjectsRes, timeslotsRes, existingOtherEntriesRes] = await Promise.all([
-      client.query(semQuery, semParams),
-      client.query(subQuery, subParams),
-      client.query('SELECT * FROM timeslot ORDER BY id ASC'),
+      db.query(semQuery, semParams),
+      db.query(subQuery, subParams),
+      db.query('SELECT * FROM timeslot ORDER BY id ASC'),
       department_id 
-        ? client.query(`
+        ? db.query(`
             SELECT te.*, sub.faculty_id
             FROM timetable_entry te
             JOIN semester sem ON te.semester_id = sem.id
@@ -388,44 +387,59 @@ async function autoGenerateTimetable(req, res) {
     }
 
     // Commit generated entries to database inside a transaction
-    await client.query('BEGIN');
+    const client = await db.pool.connect();
+    let inTransaction = false;
+    try {
+      await client.query('BEGIN');
+      inTransaction = true;
 
-    if (overwrite) {
-      if (department_id) {
-        await client.query(`
-          DELETE FROM timetable_entry
-          WHERE academic_year = $1 AND semester_id IN (
-            SELECT id FROM semester WHERE department_id = $2
-          )
-        `, [academic_year, department_id]);
-      } else {
-        await client.query('DELETE FROM timetable_entry WHERE academic_year = $1', [academic_year]);
+      if (overwrite) {
+        if (department_id) {
+          await client.query(`
+            DELETE FROM timetable_entry
+            WHERE academic_year = $1 AND semester_id IN (
+              SELECT id FROM semester WHERE department_id = $2
+            )
+          `, [academic_year, department_id]);
+        } else {
+          await client.query('DELETE FROM timetable_entry WHERE academic_year = $1', [academic_year]);
+        }
       }
+
+      const insertedEntries = [];
+      for (const entry of solution.schedule) {
+        const sessionType = entry.session_type || 'theory';
+        const insRes = await client.query(`
+          INSERT INTO timetable_entry (subject_id, semester_id, timeslot_id, academic_year, session_type)
+          VALUES ($1, $2, $3, $4, $5)
+          RETURNING *
+        `, [entry.subject_id, entry.semester_id, entry.timeslot_id, entry.academic_year, sessionType]);
+        insertedEntries.push(insRes.rows[0]);
+      }
+
+      await client.query('COMMIT');
+      inTransaction = false;
+
+      return res.json({
+        message: solution.message,
+        entriesCount: insertedEntries.length,
+        stats: solution.stats
+      });
+    } catch (txErr) {
+      if (inTransaction) {
+        try {
+          await client.query('ROLLBACK');
+        } catch (rbErr) {
+          console.error('Rollback error:', rbErr);
+        }
+      }
+      throw txErr;
+    } finally {
+      client.release();
     }
-
-    const insertedEntries = [];
-    for (const entry of solution.schedule) {
-      const sessionType = entry.session_type || 'theory';
-      const insRes = await client.query(`
-        INSERT INTO timetable_entry (subject_id, semester_id, timeslot_id, academic_year, session_type)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING *
-      `, [entry.subject_id, entry.semester_id, entry.timeslot_id, entry.academic_year, sessionType]);
-      insertedEntries.push(insRes.rows[0]);
-    }
-
-    await client.query('COMMIT');
-
-    return res.json({
-      message: solution.message,
-      entriesCount: insertedEntries.length,
-      stats: solution.stats
-    });
   } catch (err) {
-    await client.query('ROLLBACK');
+    console.error('Error in autoGenerateTimetable:', err);
     res.status(500).json({ error: err.message });
-  } finally {
-    client.release();
   }
 }
 

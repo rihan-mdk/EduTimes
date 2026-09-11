@@ -60,4 +60,13 @@ if (process.env.NODE_ENV !== 'test') {
   });
 }
 
+// Process-level safety listeners to prevent container crashes from unexpected rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+});
+
 module.exports = app;

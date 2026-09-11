@@ -13,7 +13,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
     : 'AP';
 
   return (
-    <header className="bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-xs">
+    <header className="sticky top-0 z-40 backdrop-blur-md bg-white/75 border-b border-slate-200/60 shadow-xs supports-[backdrop-filter]:bg-white/65 transition-all">
       <div className="max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 gap-4">
 
@@ -38,11 +38,11 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
             {/* Department Selector Pill */}
             {activeDepartment && (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-lg text-xs text-slate-700 font-medium transition cursor-default">
+              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/70 hover:bg-white/90 border border-slate-200/70 rounded-xl text-xs text-slate-700 font-medium transition shadow-xs backdrop-blur-xs cursor-default">
                 <Building2 className="w-4 h-4 text-orange-600 shrink-0" />
                 <span className="max-w-[150px] md:max-w-[240px] truncate">{activeDepartment.name}</span>
                 {activeDepartment.code && (
-                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-orange-800 font-bold text-[10px]">
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100/90 text-orange-800 font-bold text-[10px]">
                     {activeDepartment.code}
                   </span>
                 )}
@@ -52,13 +52,13 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
             {/* Admin View Navigation Tabs */}
             {user?.role === 'admin' && (
-              <nav className="hidden md:flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl border border-slate-200/60">
+              <nav className="hidden md:flex items-center gap-1.5 bg-slate-100/70 p-1 rounded-xl border border-slate-200/50 backdrop-blur-xs">
                 <button
                   type="button"
                   onClick={() => setActiveTab('timetable')}
                   className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
                     activeTab === 'timetable'
-                      ? 'bg-white text-orange-600 shadow-xs border border-slate-200/50'
+                      ? 'bg-white text-orange-600 shadow-xs border border-slate-200/60'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -70,7 +70,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
                   onClick={() => setActiveTab('masterdata')}
                   className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-semibold transition cursor-pointer ${
                     activeTab === 'masterdata'
-                      ? 'bg-white text-orange-600 shadow-xs border border-slate-200/50'
+                      ? 'bg-white text-orange-600 shadow-xs border border-slate-200/60'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
@@ -87,7 +87,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
               type="button"
               onClick={() => setIsProfileOpen(true)}
               title="Edit Profile & Password"
-              className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-full hover:bg-slate-50 transition border border-transparent hover:border-slate-200 group cursor-pointer text-right"
+              className="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-full hover:bg-white/80 transition border border-transparent hover:border-slate-200/70 group cursor-pointer text-right"
             >
               <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 text-slate-700 flex items-center justify-center font-bold text-xs">
                 {initials}
@@ -112,7 +112,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
               type="button"
               onClick={logout}
               title="Sign Out"
-              className="p-2 sm:px-3 sm:py-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition border border-slate-200/60 flex items-center gap-1.5 text-xs font-medium cursor-pointer"
+              className="p-2 sm:px-3 sm:py-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50/80 bg-white/50 backdrop-blur-xs rounded-xl transition border border-slate-200/60 flex items-center gap-1.5 text-xs font-medium cursor-pointer shadow-xs"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>

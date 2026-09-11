@@ -1348,70 +1348,70 @@ export default function AdminTimetable() {
       {/* 3. Modern Timetable Grid Section */}
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1 flex flex-col p-4 sm:p-5">
         <div ref={gridRef} className="overflow-x-auto">
-          <table className="w-full min-w-[1280px] border-collapse text-left table-fixed">
-            {/* Column sizing */}
+          <table className="w-full border-collapse text-left table-fixed">
+            {/* Responsive Column sizing fitting standard viewports */}
             <colgroup>
-              <col className="w-28" />
-              <col className="w-44" />
-              <col className="w-44" />
-              <col className="w-16" />
-              <col className="w-44" />
-              <col className="w-44" />
-              <col className="w-16" />
-              <col className="w-44" />
-              <col className="w-44" />
-              <col className="w-44" />
+              <col className="w-[8%]" />
+              <col className="w-[11.8%]" />
+              <col className="w-[11.8%]" />
+              <col className="w-[4.7%]" />
+              <col className="w-[11.8%]" />
+              <col className="w-[11.8%]" />
+              <col className="w-[4.7%]" />
+              <col className="w-[11.8%]" />
+              <col className="w-[11.8%]" />
+              <col className="w-[11.8%]" />
             </colgroup>
 
             {/* Table Header */}
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200/90 text-slate-700 divide-x divide-slate-200/60">
-                <th className="py-3 px-3 text-center text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-100/60" scope="col">
+                <th className="py-2.5 px-2 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100/60" scope="col">
                   DAY / TIME
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 1</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[1]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 1</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[1]}</span>
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 2</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[2]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 2</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[2]}</span>
                 </th>
                 {/* Tea Break Header */}
-                <th className="py-2.5 px-1 text-center bg-amber-50/60 border-x border-amber-100" scope="col">
+                <th className="py-2 px-0.5 text-center bg-amber-50/60 border-x border-amber-100" scope="col">
                   <div className="flex flex-col items-center justify-center">
-                    <span className="text-xs">☕</span>
-                    <span className="text-[10px] font-bold text-amber-800 uppercase tracking-tighter mt-0.5">Tea</span>
-                    <span className="text-[9px] font-medium text-amber-600/80">10:50-11:10</span>
+                    <span className="text-[11px]">☕</span>
+                    <span className="text-[9.5px] font-bold text-amber-800 uppercase tracking-tighter mt-0.5">Tea</span>
+                    <span className="text-[8.5px] font-medium text-amber-600/80">10:50-11:10</span>
                   </div>
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 3</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[3]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 3</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[3]}</span>
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 4</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[4]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 4</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[4]}</span>
                 </th>
                 {/* Lunch Break Header */}
-                <th className="py-2.5 px-1 text-center bg-orange-50/60 border-x border-orange-100" scope="col">
+                <th className="py-2 px-0.5 text-center bg-orange-50/60 border-x border-orange-100" scope="col">
                   <div className="flex flex-col items-center justify-center">
-                    <span className="text-xs">🍽️</span>
-                    <span className="text-[10px] font-bold text-orange-800 uppercase tracking-tighter mt-0.5">Lunch</span>
-                    <span className="text-[9px] font-medium text-orange-600/80">13:00-13:50</span>
+                    <span className="text-[11px]">🍽️</span>
+                    <span className="text-[9.5px] font-bold text-orange-800 uppercase tracking-tighter mt-0.5">Lunch</span>
+                    <span className="text-[8.5px] font-medium text-orange-600/80">13:00-13:50</span>
                   </div>
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 5</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[5]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 5</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[5]}</span>
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 6</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[6]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 6</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[6]}</span>
                 </th>
-                <th className="py-2.5 px-3 text-center" scope="col">
-                  <span className="block text-xs font-bold text-slate-800 tracking-wide">PERIOD 7</span>
-                  <span className="block text-[11px] font-normal text-slate-400 mt-0.5">{PERIOD_TIMES[7]}</span>
+                <th className="py-2 px-1.5 text-center" scope="col">
+                  <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 7</span>
+                  <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[7]}</span>
                 </th>
               </tr>
             </thead>
@@ -1446,7 +1446,7 @@ export default function AdminTimetable() {
                       onDragOver={(e) => handleDragOver(e, day, p)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, p)}
-                      className={`p-2 border-r border-slate-200 transition-colors cursor-pointer ${
+                      className={`p-1.5 border-r border-slate-200 transition-colors cursor-pointer ${
                         isDragOver ? 'bg-orange-100/70 ring-2 ring-orange-400 ring-inset' : 'hover:bg-slate-50/60'
                       }`}
                     >
@@ -1470,8 +1470,9 @@ export default function AdminTimetable() {
                 return (
                   <tr key={day} className="hover:bg-slate-50/40 transition-colors">
                     {/* Day Name */}
-                    <td className="px-3 py-3 font-semibold text-xs text-slate-700 text-center bg-slate-50/70 border-r border-slate-200">
-                      {day}
+                    <td className="px-2 py-2 font-bold text-xs text-slate-700 text-center bg-slate-50/70 border-r border-slate-200">
+                      <span className="hidden xl:inline">{day}</span>
+                      <span className="xl:hidden">{day.slice(0, 3).toUpperCase()}</span>
                     </td>
 
                     {renderPeriodTd(1)}
@@ -1571,8 +1572,18 @@ export default function AdminTimetable() {
       {/* Parallel / Replace Confirmation Dialog */}
       {parallelDialog && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 max-w-sm w-full mx-4 space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start gap-3">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 max-w-sm w-full mx-4 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            {/* Top-right Cancel Cross Icon */}
+            <button
+              type="button"
+              onClick={handleDismissParallel}
+              aria-label="Cancel"
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-start gap-3 pr-6">
               <span className="text-2xl">⚡</span>
               <div>
                 <p className="font-bold text-slate-900 text-base">Slot Already Occupied</p>
@@ -1587,13 +1598,13 @@ export default function AdminTimetable() {
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-purple-500 inline-block" />
-                <span className="text-slate-600">
+                <span className="text-slate-600 truncate">
                   Current: <strong>{parallelDialog.targetEntries[0]?.subject_code}</strong> — {parallelDialog.targetEntries[0]?.subject_name}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
-                <span className="text-slate-600">
+                <span className="text-slate-600 truncate">
                   Incoming: <strong>{parallelDialog.drag.subjectCode}</strong>
                 </span>
               </div>
@@ -1603,32 +1614,23 @@ export default function AdminTimetable() {
               Run both subjects in parallel, or replace the current subject?
             </p>
 
-            <div className="flex flex-col gap-2 pt-1">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleConfirmParallel}
-                  disabled={parallelDialog.targetEntries.length >= 2}
-                  className="flex-1 py-2 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-40"
-                  title="Schedule both subjects in parallel"
-                >
-                  Yes, make parallel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReplaceSlot}
-                  className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1"
-                  title={`Replace ${parallelDialog.targetEntries[0]?.subject_code} with ${parallelDialog.drag.subjectCode}`}
-                >
-                  No, replace {parallelDialog.targetEntries[0]?.subject_code}
-                </button>
-              </div>
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={handleDismissParallel}
-                className="w-full py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-medium rounded-lg transition-colors"
+                onClick={handleConfirmParallel}
+                disabled={parallelDialog.targetEntries.length >= 2}
+                className="flex-1 py-2 px-3 bg-orange-500 hover:bg-orange-600 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 disabled:opacity-40 cursor-pointer"
+                title="Schedule both subjects in parallel"
               >
-                Cancel (Leave unchanged)
+                Yes, make parallel
+              </button>
+              <button
+                type="button"
+                onClick={handleReplaceSlot}
+                className="flex-1 py-2 px-3 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                title={`Replace ${parallelDialog.targetEntries[0]?.subject_code} with ${parallelDialog.drag.subjectCode}`}
+              >
+                No, replace {parallelDialog.targetEntries[0]?.subject_code}
               </button>
             </div>
           </div>
@@ -2287,7 +2289,7 @@ const SESSION_STYLES = {
 function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
   if (!entry) {
     return (
-      <div className="h-20 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-medium transition-colors">
+      <div className="h-14 sm:h-15 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-medium transition-colors">
         + Free
       </div>
     );
@@ -2295,11 +2297,11 @@ function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
 
   const isLab = Boolean(entry.is_lab || entry.session_type === 'lab');
   const cardBg = isLab
-    ? 'bg-amber-50/60 hover:bg-amber-50 border-amber-200'
-    : 'bg-orange-50/60 hover:bg-orange-50 border-orange-200';
+    ? 'bg-amber-50/70 hover:bg-amber-100/60 border-amber-200/90'
+    : 'bg-orange-50/70 hover:bg-orange-100/60 border-orange-200/90';
   const textCode = isLab ? 'text-amber-950' : 'text-orange-950';
-  const textFac = isLab ? 'text-amber-800/80' : 'text-orange-800/80';
-  const badgeBg = isLab ? 'bg-amber-200/70 text-amber-900' : 'bg-orange-200/70 text-orange-900';
+  const textFac = isLab ? 'text-amber-800/90' : 'text-orange-800/90';
+  const badgeBg = isLab ? 'bg-amber-200 text-amber-900' : 'bg-orange-200 text-orange-900';
   const hoursBg = isLab ? 'bg-amber-100 text-amber-800' : 'bg-orange-100 text-orange-800';
   const labelText = isLab ? 'LAB' : 'BLOCK';
 
@@ -2308,22 +2310,18 @@ function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className={`group relative h-20 border rounded-xl p-2.5 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${cardBg}`}
+      className={`group relative h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${cardBg}`}
     >
-      <div className="flex items-start justify-between gap-1.5">
-        <div className="min-w-0 flex-1">
-          <span className={`font-bold text-xs ${textCode} block truncate tracking-tight`}>{entry.subject_code}</span>
-          {entry.faculty_name && (
-            <span className={`text-[11px] font-medium ${textFac} truncate block mt-0.5`}>{entry.faculty_name}</span>
-          )}
-        </div>
+      <div className="flex items-center justify-between gap-1">
+        <span className={`font-bold text-xs ${textCode} truncate tracking-tight`}>{entry.subject_code}</span>
         <div className="flex items-center gap-1 shrink-0">
-          <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] uppercase ${badgeBg}`}>{labelText}</span>
-          <span className={`px-1.5 py-0.5 rounded font-semibold text-[9px] ${hoursBg}`}>{span}h</span>
+          <span className={`px-1 py-0.2 rounded font-bold text-[9px] uppercase ${badgeBg}`}>{labelText}</span>
+          <span className={`px-1 py-0.2 rounded font-semibold text-[9px] ${hoursBg}`}>{span}h</span>
         </div>
       </div>
-      <div className="text-[10px] font-medium text-slate-500 font-mono">
-        {timeRange}
+      <div className="flex items-center justify-between gap-1 text-[10px] leading-tight">
+        <span className={`font-medium ${textFac} truncate`}>{entry.faculty_code || entry.faculty_name}</span>
+        <span className="text-[9.5px] font-mono text-slate-400 shrink-0">{timeRange}</span>
       </div>
     </div>
   );
@@ -2335,7 +2333,7 @@ function SlotCell({ entries, onDragStart }) {
 
   if (items.length === 0) {
     return (
-      <div className="h-20 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-500 text-xs font-medium transition-colors">
+      <div className="h-14 sm:h-15 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-500 text-xs font-medium transition-colors">
         + Free
       </div>
     );
@@ -2344,17 +2342,17 @@ function SlotCell({ entries, onDragStart }) {
   // Multiple occupants in same slot = parallel activities (NSS/PE split)
   if (items.length > 1) {
     return (
-      <div className="h-20 bg-purple-50/60 hover:bg-purple-50 border border-purple-200 rounded-xl p-1.5 flex flex-col justify-around transition shadow-xs hover:shadow">
+      <div className="h-14 sm:h-15 bg-purple-50/60 hover:bg-purple-50 border border-purple-200 rounded-xl p-1 flex flex-col justify-around transition shadow-xs hover:shadow">
         {items.map((entry, idx) => (
           <div
             key={entry.id || idx}
             draggable
             onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center justify-between px-2 py-1 bg-white/80 rounded-lg border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition"
+            className="flex items-center justify-between px-1.5 py-0.5 bg-white/90 rounded border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition text-[10px]"
           >
-            <span className="font-mono font-bold text-[11px] text-purple-900">{entry.subject_code}</span>
-            <span className="text-[9px] font-bold text-purple-700 bg-purple-100 px-1 rounded">PAR</span>
+            <span className="font-mono font-bold text-purple-900 truncate">{entry.subject_code}</span>
+            <span className="text-[8.5px] font-bold text-purple-700 bg-purple-100 px-1 rounded shrink-0">PAR</span>
           </div>
         ))}
       </div>
@@ -2370,17 +2368,19 @@ function SlotCell({ entries, onDragStart }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className={`h-20 border rounded-xl p-2.5 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
+      className={`h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
     >
-      <div>
-        <span className="font-bold text-xs tracking-tight block">{entry.subject_code}</span>
-        {entry.faculty_name && (
-          <span className="text-[10.5px] font-normal text-slate-600 truncate block mt-0.5">{entry.faculty_name}</span>
-        )}
+      <div className="flex items-center justify-between gap-1">
+        <span className="font-bold text-xs tracking-tight truncate">{entry.subject_code}</span>
+        <span className={`text-[9px] font-bold uppercase px-1 py-0.2 rounded shrink-0 ${style.badge}`}>
+          {sessionType === 'theory' ? '1h' : (sessionType === 'activity' ? 'ACT' : (sessionType === 'lab' ? 'LAB' : sessionType))}
+        </span>
       </div>
-      <div className="flex items-center justify-between text-[10px] font-medium mt-1">
-        <span className="text-slate-500 capitalize">{sessionType}</span>
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${style.badge}`}>1h</span>
+      <div className="flex items-center justify-between text-[10px] leading-tight">
+        <span className="text-slate-600 truncate font-medium">{entry.faculty_code || entry.faculty_name}</span>
+        {entry.room_number && (
+          <span className="text-[9px] text-slate-400 font-mono shrink-0">{entry.room_number}</span>
+        )}
       </div>
     </div>
   );
