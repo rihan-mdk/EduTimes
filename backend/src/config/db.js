@@ -29,6 +29,13 @@ pgPool = process.env.DATABASE_URL
       connectionTimeoutMillis: 1500,
     });
 
+// Handle idle connection errors to prevent unhandled 'error' events from crashing Node
+if (pgPool) {
+  pgPool.on('error', (err) => {
+    console.error('Unexpected error on idle pg client (handled):', err.message);
+  });
+}
+
 // Setup embedded in-memory PostgreSQL engine fallback
 function initMemoryDb() {
   if (memDb) return memDb;
