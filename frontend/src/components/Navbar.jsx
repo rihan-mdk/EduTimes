@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Calendar, Database, User, Building2, ChevronDown } from 'lucide-react';
+import { LogOut, Calendar, Database, User, Building2 } from 'lucide-react';
 import ProfileModal from './ProfileModal';
 
 export default function Navbar({ activeTab, setActiveTab }) {
@@ -36,7 +36,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
 
             <div className="h-5 w-px bg-slate-200 hidden md:block" />
 
-            {/* Department Selector Pill */}
+            {/* Department Indicator Badge */}
             {activeDepartment && (
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white/70 hover:bg-white/90 border border-slate-200/70 rounded-xl text-xs text-slate-700 font-medium transition shadow-xs backdrop-blur-xs cursor-default">
                 <Building2 className="w-4 h-4 text-orange-600 shrink-0" />
@@ -46,7 +46,6 @@ export default function Navbar({ activeTab, setActiveTab }) {
                     {activeDepartment.code}
                   </span>
                 )}
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               </div>
             )}
 
