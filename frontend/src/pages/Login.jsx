@@ -152,11 +152,13 @@ export default function Login({ onLoginSuccess }) {
         >
           {/* Logo + Brand */}
           <div className="flex flex-col items-center mb-6">
-            <div className="w-11 h-11 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-lg mb-3">
-              <Calendar className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center font-extrabold text-2xl shadow-lg shadow-orange-500/30 border border-white/20 mb-3">
+              E
             </div>
-            <h1 className="text-xl font-black tracking-tight text-white">EduTimes</h1>
-            <p className="mt-1 text-xs text-white/60 tracking-wide">Department Timetable &amp; Scheduling</p>
+            <h1 className="text-2xl font-black tracking-tight text-white">
+              Edu<span className="text-orange-400">Times</span>
+            </h1>
+            <p className="mt-1 text-xs text-white/70 tracking-wider uppercase font-medium">Academic Suite</p>
           </div>
 
           {/* STEP 1: Dept Code */}

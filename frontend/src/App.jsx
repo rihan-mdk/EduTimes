@@ -43,9 +43,17 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
-        <Loader2 className="w-10 h-10 text-orange-500 animate-spin mb-3" />
-        <p className="text-sm font-medium text-slate-500">Initializing EduTimes...</p>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center select-none">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white font-extrabold text-2xl shadow-lg shadow-orange-500/20 mb-3 animate-pulse">
+          E
+        </div>
+        <div className="text-lg font-bold text-slate-900 tracking-tight">
+          Edu<span className="text-orange-600">Times</span>
+        </div>
+        <div className="flex items-center gap-1.5 mt-2">
+          <Loader2 className="w-3.5 h-3.5 text-orange-500 animate-spin" />
+          <span className="text-xs font-medium text-slate-400">Loading workspace...</span>
+        </div>
       </div>
     );
   }
