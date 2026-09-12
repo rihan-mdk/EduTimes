@@ -2,11 +2,32 @@ import React, { useEffect, useState } from "react";
 
 export default function SplashScreen({ onDone }) {
   const [visible, setVisible] = useState(true);
+  const [progress, setProgress] = useState(8);
 
   useEffect(() => {
+    const startTime = performance.now();
+    const duration = 1600; // ms to reach full progress before fade
+    let animFrame;
+
+    const updateProgress = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progressFraction = Math.min(elapsed / duration, 1);
+      // Smooth ease-out curve
+      const eased = 1 - Math.pow(1 - progressFraction, 2.5);
+      const currentPercent = Math.min(100, Math.round(8 + eased * 92));
+      setProgress(currentPercent);
+
+      if (progressFraction < 1) {
+        animFrame = requestAnimationFrame(updateProgress);
+      }
+    };
+
+    animFrame = requestAnimationFrame(updateProgress);
+
     const fadeTimer = setTimeout(() => setVisible(false), 1800);
     const doneTimer = setTimeout(() => onDone && onDone(), 2200);
     return () => {
+      cancelAnimationFrame(animFrame);
       clearTimeout(fadeTimer);
       clearTimeout(doneTimer);
     };
@@ -59,9 +80,18 @@ export default function SplashScreen({ onDone }) {
           </p>
         </div>
 
-        {/* Clean minimal loader indicator */}
-        <div className="w-28 h-1 bg-white/10 rounded-full mt-6 overflow-hidden relative">
-          <div className="absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-orange-500 to-amber-400 rounded-full animate-[pulse_1.2s_ease-in-out_infinite]" />
+        {/* Dynamic moving loader indicator */}
+        <div className="w-36 sm:w-44 h-1.5 bg-white/10 rounded-full mt-7 overflow-hidden relative border border-white/5 shadow-inner">
+          {/* Progress fill */}
+          <div
+            className="h-full bg-gradient-to-r from-orange-600 via-orange-500 to-amber-400 rounded-full relative transition-[width] duration-75 ease-out shadow-[0_0_12px_rgba(249,115,22,0.5)]"
+            style={{ width: `${progress}%` }}
+          >
+            {/* Continuously moving shimmer beam */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent -translate-x-full animate-[shimmer_1.2s_ease-in-out_infinite]" />
+            {/* Glowing tip at leading edge */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-200 shadow-[0_0_8px_#f97316] pointer-events-none" />
+          </div>
         </div>
       </div>
     </div>
