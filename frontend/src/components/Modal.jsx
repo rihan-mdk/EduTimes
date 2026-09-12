@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }) {
@@ -14,7 +15,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
       <div 
@@ -43,6 +44,7 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
           <div className="px-6 py-5">{children}</div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

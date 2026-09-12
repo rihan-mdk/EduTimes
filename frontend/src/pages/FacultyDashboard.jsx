@@ -280,61 +280,86 @@ export default function FacultyDashboard() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-slate-300 text-center text-sm">
+            <table className="w-full border-collapse text-left table-fixed">
+              {/* Responsive Column sizing fitting standard viewports */}
+              <colgroup>
+                <col className="w-[8%]" />
+                <col className="w-[11.8%]" />
+                <col className="w-[11.8%]" />
+                <col className="w-[4.7%]" />
+                <col className="w-[11.8%]" />
+                <col className="w-[11.8%]" />
+                <col className="w-[4.7%]" />
+                <col className="w-[11.8%]" />
+                <col className="w-[11.8%]" />
+                <col className="w-[11.8%]" />
+              </colgroup>
+
+              {/* Table Header */}
               <thead>
-                <tr className="bg-slate-100 text-slate-800 text-xs font-bold uppercase tracking-wider">
-                  <th className="border border-slate-300 py-3 px-2 w-28 bg-slate-200">Day / Period</th>
+                <tr className="bg-slate-50 border-b border-slate-200/90 text-slate-700 divide-x divide-slate-200/60">
+                  <th className="py-2.5 px-2 text-center text-[11px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100/60" scope="col">
+                    DAY / TIME
+                  </th>
                   
                   {/* Period 1 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 1</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[1].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 1</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[1].label}</span>
                   </th>
 
                   {/* Period 2 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 2</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[2].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 2</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[2].label}</span>
                   </th>
 
                   {/* Tea Break */}
-                  <th className="border border-slate-300 py-2 px-1 w-10 bg-amber-50/70 text-amber-800 font-semibold text-[10px]">
-                    <Coffee className="w-3.5 h-3.5 text-amber-700 mx-auto" />
+                  <th className="py-2 px-0.5 text-center bg-amber-50/60 border-x border-amber-100" scope="col">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[11px]">☕</span>
+                      <span className="text-[9.5px] font-bold text-amber-800 uppercase tracking-tighter mt-0.5">Tea</span>
+                      <span className="text-[8.5px] font-medium text-amber-600/80">10:50-11:10</span>
+                    </div>
                   </th>
 
                   {/* Period 3 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 3</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[3].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 3</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[3].label}</span>
                   </th>
 
                   {/* Period 4 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 4</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[4].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 4</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[4].label}</span>
                   </th>
 
                   {/* Lunch Break */}
-                  <th className="border border-slate-300 py-2 px-1 w-10 bg-amber-50/70 text-amber-800 font-semibold text-[10px]">
-                    <Utensils className="w-3.5 h-3.5 text-amber-700 mx-auto" />
+                  <th className="py-2 px-0.5 text-center bg-orange-50/60 border-x border-orange-100" scope="col">
+                    <div className="flex flex-col items-center justify-center">
+                      <span className="text-[11px]">🍽️</span>
+                      <span className="text-[9.5px] font-bold text-orange-800 uppercase tracking-tighter mt-0.5">Lunch</span>
+                      <span className="text-[8.5px] font-medium text-orange-600/80">13:00-13:50</span>
+                    </div>
                   </th>
 
                   {/* Period 5 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 5</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[5].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 5</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[5].label}</span>
                   </th>
 
                   {/* Period 6 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 6</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[6].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 6</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[6].label}</span>
                   </th>
 
                   {/* Period 7 */}
-                  <th className="border border-slate-300 py-2 px-1 min-w-[120px]">
-                    <div>Period 7</div>
-                    <div className="text-[10px] font-mono font-normal text-slate-500">{PERIOD_TIMES[7].label}</div>
+                  <th className="py-2 px-1 text-center" scope="col">
+                    <span className="block text-xs font-bold text-slate-800 tracking-tight">PERIOD 7</span>
+                    <span className="block text-[10px] font-normal text-slate-400 font-mono mt-0.5">{PERIOD_TIMES[7].label}</span>
                   </th>
                 </tr>
               </thead>
@@ -354,7 +379,7 @@ export default function FacultyDashboard() {
                     if (skipPeriods.has(p)) return null;
                     const mergeInfo = mergeMap.get(p);
                     return (
-                      <td key={p} colSpan={mergeInfo ? mergeInfo.span : 1} className="border border-slate-300 p-1.5">
+                      <td key={p} colSpan={mergeInfo ? mergeInfo.span : 1} className="p-1 align-top">
                         <FacultySlotCell
                           entry={gridMap.get(`${day}_${p}`)}
                           span={mergeInfo ? mergeInfo.span : 1}
@@ -365,14 +390,15 @@ export default function FacultyDashboard() {
                   };
 
                   return (
-                    <tr key={day} className={`h-20 ${isToday ? 'bg-orange-50/30' : ''}`}>
-                      <td className={`border border-slate-300 font-bold text-xs px-2 py-3 ${
-                        isToday ? 'bg-orange-100 text-orange-950 font-black' : 'bg-slate-50 text-slate-900'
+                    <tr key={day} className={`divide-x divide-slate-200/60 border-b border-slate-200/80 transition-colors ${isToday ? 'bg-orange-50/20' : 'hover:bg-slate-50/40'}`}>
+                      <td className={`p-2 text-center align-middle font-bold text-xs ${
+                        isToday ? 'bg-orange-50/80 text-orange-900 border-l-4 border-l-orange-500' : 'bg-slate-50/80 text-slate-700'
                       }`}>
-                        <div className="flex flex-col items-center">
-                          <span>{day}</span>
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="font-bold text-xs">{day.slice(0, 3)}</span>
+                          <span className="text-[10px] font-normal text-slate-400 hidden sm:inline">{day.slice(3)}</span>
                           {isToday && (
-                            <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.2 mt-0.5 rounded bg-orange-500 text-white">
+                            <span className="text-[9px] font-black uppercase px-1 py-0.2 mt-1 rounded bg-orange-500 text-white shadow-xs">
                               Today
                             </span>
                           )}
@@ -382,15 +408,21 @@ export default function FacultyDashboard() {
                       {renderPeriodTd(1)}
                       {renderPeriodTd(2)}
 
-                      <td className="border border-slate-300 bg-amber-50/30 text-slate-300 text-xs">
-                        ||
+                      {/* Tea Break Column */}
+                      <td className="p-0 text-center bg-amber-50/30 border-x border-amber-100/60 align-middle">
+                        <div className="h-full min-h-[62px] flex items-center justify-center text-amber-300 select-none">
+                          <span className="text-[10px] font-mono tracking-widest rotate-90 text-amber-400/80">|||</span>
+                        </div>
                       </td>
 
                       {renderPeriodTd(3)}
                       {renderPeriodTd(4)}
 
-                      <td className="border border-slate-300 bg-amber-50/30 text-slate-300 text-xs">
-                        ||
+                      {/* Lunch Break Column */}
+                      <td className="p-0 text-center bg-orange-50/30 border-x border-orange-100/60 align-middle">
+                        <div className="h-full min-h-[62px] flex items-center justify-center text-orange-300 select-none">
+                          <span className="text-[10px] font-mono tracking-widest rotate-90 text-orange-400/80">|||</span>
+                        </div>
                       </td>
 
                       {renderPeriodTd(5)}
@@ -411,8 +443,8 @@ export default function FacultyDashboard() {
 function FacultySlotCell({ entry, span = 1, timeRange }) {
   if (!entry) {
     return (
-      <div className="h-full min-h-[58px] flex items-center justify-center text-slate-300 text-xs font-dashed">
-        <span className="text-[11px] font-mono text-slate-300">— Free —</span>
+      <div className="h-full min-h-[62px] flex items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50/40 text-slate-300">
+        <span className="text-[10px] font-mono tracking-wider text-slate-300 select-none">— Free —</span>
       </div>
     );
   }
@@ -420,29 +452,31 @@ function FacultySlotCell({ entry, span = 1, timeRange }) {
   const isLab = entry.is_lab || entry.session_type === 'lab';
 
   return (
-    <div className={`h-full min-h-[58px] p-2 rounded-md flex flex-col justify-center text-left border shadow-xs ${
+    <div className={`h-full min-h-[62px] p-1.5 rounded-lg flex flex-col justify-between text-left border shadow-xs transition-all hover:shadow-sm ${
       isLab 
-        ? 'bg-amber-50 border-amber-300 text-amber-950' 
-        : 'bg-blue-50 border-blue-300 text-blue-950'
+        ? 'bg-amber-50/80 border-amber-200 text-amber-950' 
+        : 'bg-blue-50/80 border-blue-200 text-blue-950'
     }`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <span className="font-mono font-bold text-xs">{entry.subject_code}</span>
-          {span > 1 && (
-            <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-300 text-amber-900">
-              {span}h
-            </span>
-          )}
+      <div>
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="font-mono font-bold text-xs truncate">{entry.subject_code}</span>
+            {span > 1 && (
+              <span className="text-[9px] font-black px-1 py-0.2 rounded bg-amber-400/90 text-amber-950 shrink-0">
+                {span}h
+              </span>
+            )}
+          </div>
+          <span className="text-[9.5px] font-semibold px-1 py-0.2 rounded bg-white/90 border border-slate-200/80 text-slate-600 shrink-0">
+            S{entry.semester_number} ({entry.class_room})
+          </span>
         </div>
-        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-white/80 border border-slate-200">
-          S{entry.semester_number} ({entry.class_room})
-        </span>
-      </div>
-      <div className="text-[11px] font-medium text-slate-800 truncate leading-snug mt-0.5">
-        {entry.subject_name}
+        <div className="text-[11px] font-medium text-slate-700 truncate leading-snug mt-0.5" title={entry.subject_name}>
+          {entry.subject_name}
+        </div>
       </div>
       {timeRange && (
-        <div className="text-[9px] font-mono text-amber-600 mt-0.5">
+        <div className="text-[9px] font-mono text-amber-700/80 mt-0.5">
           {timeRange}
         </div>
       )}
