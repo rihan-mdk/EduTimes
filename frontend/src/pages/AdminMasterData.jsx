@@ -381,8 +381,8 @@ export default function AdminMasterData() {
                     type="button"
                     onClick={() => setSubjectSemesterFilter('all')}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${subjectSemesterFilter === 'all'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-orange-500 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                   >
                     All Semesters ({filteredSubjects.length})
@@ -395,8 +395,8 @@ export default function AdminMasterData() {
                         type="button"
                         onClick={() => setSubjectSemesterFilter(String(sem.id))}
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${String(subjectSemesterFilter) === String(sem.id)
-                            ? 'bg-orange-500 text-white shadow-xs'
-                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'bg-orange-500 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                           }`}
                       >
                         <span>Semester {sem.number}</span>
@@ -638,8 +638,8 @@ export default function AdminMasterData() {
                     type="button"
                     onClick={() => setFacultyViewMode('bySemester')}
                     className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${facultyViewMode === 'bySemester'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-orange-500 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                   >
                     <Layers className="w-3.5 h-3.5" />
@@ -649,8 +649,8 @@ export default function AdminMasterData() {
                     type="button"
                     onClick={() => setFacultyViewMode('all')}
                     className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${facultyViewMode === 'all'
-                        ? 'bg-orange-500 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      ? 'bg-orange-500 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                       }`}
                   >
                     <Users className="w-3.5 h-3.5" />
@@ -1091,8 +1091,8 @@ export default function AdminMasterData() {
         title={
           activeSubTab === 'subjects'
             ? (editingItem
-                ? `Edit ${formData.is_generic_activity ? 'Activity' : 'Subject'}`
-                : (subjectModalMode === 'activity' ? 'Add Generic Activity' : 'Add New Subject'))
+              ? `Edit ${formData.is_generic_activity ? 'Activity' : 'Subject'}`
+              : (subjectModalMode === 'activity' ? 'Add Generic Activity' : 'Add New Subject'))
             : `${editingItem ? 'Edit' : 'Add New'} ${activeSubTab.slice(0, -1)}`
         }
       >
@@ -1345,7 +1345,7 @@ export default function AdminMasterData() {
                     className="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-300"
                     style={{ color: subjectModalMode === 'subject' ? '#fff' : '#64748b' }}
                   >
-                    📚 Academic Subject
+                    Subject
                   </button>
                   <button
                     type="button"
@@ -1362,7 +1362,7 @@ export default function AdminMasterData() {
                     className="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-300"
                     style={{ color: subjectModalMode === 'activity' ? '#fff' : '#64748b' }}
                   >
-                    🎯 Generic Activity
+                    Activity
                   </button>
                 </div>
               )}
