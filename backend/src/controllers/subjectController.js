@@ -59,7 +59,6 @@ async function getSubjectById(req, res) {
 async function createSubject(req, res) {
   try {
     const { 
-      subject_code, 
       name, 
       semester_id, 
       faculty_id, 
@@ -70,17 +69,32 @@ async function createSubject(req, res) {
       block_session_hours = 0,
       block_session_count = 0
     } = req.body;
-    if (!subject_code || !name || !semester_id || !faculty_id || !weekly_hours) {
-      return res.status(400).json({ error: 'subject_code, name, semester_id, faculty_id, and weekly_hours are required' });
+    let { subject_code } = req.body;
+
+    if (!name || !semester_id || !weekly_hours) {
+      return res.status(400).json({ error: 'name, semester_id, and weekly_hours are required' });
     }
 
-    const trimmedCode = subject_code.trim();
+    // For academic subjects, faculty is required
+    if (!is_generic_activity && !faculty_id) {
+      return res.status(400).json({ error: 'faculty_id is required for academic subjects' });
+    }
+
+    // For generic activities, auto-generate a subject code if none provided
+    if (is_generic_activity && (!subject_code || !subject_code.trim())) {
+      // Generate a short slug from the name, e.g. "Library" -> "ACT-LIB"
+      const slug = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      subject_code = `ACT-${slug || 'GEN'}`;
+    }
+
+    const trimmedCode = (subject_code || '').trim();
+    if (!trimmedCode) {
+      return res.status(400).json({ error: 'subject_code is required' });
+    }
 
     // Step 1: Check for duplicate subject_code within the same semester
     console.log(`\n🔍 [Subject Validation] Checking uniqueness for subject_code: "${trimmedCode}" in semester ${semester_id}`);
     const checkSql = 'SELECT id, subject_code, name FROM subject WHERE subject_code = $1 AND semester_id = $2';
-    console.log(`   SQL: ${checkSql} | Params: [ "${trimmedCode}", ${semester_id} ]`);
-
     const existing = await db.query(checkSql, [trimmedCode, semester_id]);
     if (existing.rows.length > 0) {
       console.warn(`⚠️ [Subject Validation] Duplicate found in semester: ID=${existing.rows[0].id}, Name="${existing.rows[0].name}"`);
@@ -91,18 +105,20 @@ async function createSubject(req, res) {
     }
     console.log(`✅ [Subject Validation] subject_code "${trimmedCode}" is available for semester ${semester_id}.`);
 
+    const effectiveFacultyId = is_generic_activity ? null : (faculty_id || null);
+
     const insertSql = `
       INSERT INTO subject (subject_code, name, semester_id, faculty_id, weekly_hours, is_lab, is_parallel_activity, is_generic_activity, block_session_hours, block_session_count)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
-    console.log(`📝 [Subject Insert] Executing insert for "${name.trim()}" (${trimmedCode})`);
+    console.log(`📝 [Subject Insert] Executing insert for "${name.trim()}" (${trimmedCode}), generic=${is_generic_activity}`);
 
     const result = await db.query(insertSql, [
       trimmedCode, 
       name.trim(), 
       semester_id, 
-      faculty_id, 
+      effectiveFacultyId, 
       weekly_hours, 
       is_lab,
       is_parallel_activity,
@@ -134,7 +150,6 @@ async function createSubject(req, res) {
 async function updateSubject(req, res) {
   try {
     const { 
-      subject_code, 
       name, 
       semester_id, 
       faculty_id, 
@@ -145,8 +160,16 @@ async function updateSubject(req, res) {
       block_session_hours = 0,
       block_session_count = 0
     } = req.body;
+    let { subject_code } = req.body;
     const { id } = req.params;
-    const trimmedCode = subject_code.trim();
+
+    // For generic activities, auto-generate a code if none provided
+    if (is_generic_activity && (!subject_code || !subject_code.trim())) {
+      const slug = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      subject_code = `ACT-${slug || 'GEN'}`;
+    }
+
+    const trimmedCode = (subject_code || '').trim();
 
     // Check if code is taken by another subject in the same semester
     console.log(`\n🔍 [Subject Update Validation] Checking code "${trimmedCode}" for semester ${semester_id} and ID != ${id}`);
@@ -156,6 +179,8 @@ async function updateSubject(req, res) {
       console.warn(`⚠️ [Subject Update] Code "${trimmedCode}" already used in this semester by "${existing.rows[0].name}"`);
       return res.status(400).json({ error: `Subject code "${trimmedCode}" is already in use in this semester by "${existing.rows[0].name}".` });
     }
+
+    const effectiveFacultyId = is_generic_activity ? null : (faculty_id || null);
 
     const updateSql = `
       UPDATE subject
@@ -167,7 +192,7 @@ async function updateSubject(req, res) {
       trimmedCode, 
       name.trim(), 
       semester_id, 
-      faculty_id, 
+      effectiveFacultyId, 
       weekly_hours, 
       is_lab,
       is_parallel_activity,

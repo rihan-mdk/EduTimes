@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS subject (
     subject_code VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     semester_id INTEGER NOT NULL REFERENCES semester(id) ON DELETE CASCADE,
-    faculty_id INTEGER NOT NULL REFERENCES faculty(id) ON DELETE RESTRICT,
+    faculty_id INTEGER REFERENCES faculty(id) ON DELETE RESTRICT,
     weekly_hours INTEGER NOT NULL CHECK (weekly_hours > 0),
     is_lab BOOLEAN NOT NULL DEFAULT FALSE,
     is_parallel_activity BOOLEAN NOT NULL DEFAULT FALSE,
