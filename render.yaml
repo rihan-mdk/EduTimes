@@ -7,6 +7,11 @@ services:
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
+    # Health check — Render pings /api/health every 30s.
+    # On the free plan, the container spins down after 15min of inactivity.
+    # Cold starts take ~5-10s. Without a generous timeout, Render marks the
+    # instance as failed during startup and kills it — which then causes CORS errors
+    # on the frontend because the server never responds to the OPTIONS preflight.
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV

@@ -38,6 +38,16 @@ export async function apiRequest(endpoint, options = {}) {
 
     return data;
   } catch (err) {
+    // Detect network-level failures (server down, CORS preflight blocked, cold start).
+    // These appear as TypeError: "Failed to fetch" with no HTTP status — the browser
+    // cannot reach the server at all, so no CORS headers are received.
+    if (err instanceof TypeError && err.message.toLowerCase().includes('fetch')) {
+      const friendly = new Error(
+        'Unable to reach the server. It may be starting up — please wait a few seconds and try again.'
+      );
+      friendly.isNetworkError = true;
+      throw friendly;
+    }
     if (err.status === 401) {
       // Auto logout on token expiration
       localStorage.removeItem('yensync_token');
