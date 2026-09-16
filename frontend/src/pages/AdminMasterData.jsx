@@ -1363,10 +1363,10 @@ export default function AdminMasterData() {
                   <input
                     type="number"
                     min="1"
-                    max="10"
+                    max="20"
                     required
-                    value={formData.weekly_hours || 4}
-                    onChange={(e) => setFormData({ ...formData, weekly_hours: parseInt(e.target.value, 10) })}
+                    value={formData.weekly_hours !== undefined ? formData.weekly_hours : 4}
+                    onChange={(e) => setFormData({ ...formData, weekly_hours: e.target.value === '' ? '' : parseInt(e.target.value, 10) })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                 </div>
