@@ -51,18 +51,20 @@ function initMemoryDb() {
   const migration5 = fs.readFileSync(path.join(__dirname, '../../migrations/005_add_department_code.sql'), 'utf8');
   const migration6 = fs.readFileSync(path.join(__dirname, '../../migrations/006_scope_subject_code_uniqueness.sql'), 'utf8');
   const migration7 = fs.readFileSync(path.join(__dirname, '../../migrations/007_add_semester_advisor_and_mentors.sql'), 'utf8');
+  const migration8 = fs.readFileSync(path.join(__dirname, '../../migrations/008_make_faculty_id_nullable_for_generic_activities.sql'), 'utf8');
 
   try {
     memDb.public.none(migration1);
     memDb.public.none(migration2);
-    // Migrations 003 to 007: ALTER TABLE statements may be no-ops in pg-mem
+    // Migrations 003 to 008: ALTER TABLE statements may be no-ops in pg-mem
     // since the columns are already defined in migration 001 above.
     try { memDb.public.none(migration3); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration4); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration5); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration6); } catch (e) { /* constraint already exists */ }
     try { memDb.public.none(migration7); } catch (e) { /* column already exists */ }
-    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-007!');
+    try { memDb.public.none(migration8); } catch (e) { /* constraint already altered */ }
+    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-008!');
   } catch (err) {
     console.warn('Memory DB init note:', err.message);
   }
