@@ -57,6 +57,9 @@ export default function AdminMasterData() {
   const [bulkDeleteType, setBulkDeleteType] = useState(null); // 'subjects' | 'faculty' | null
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Subject modal mode: 'subject' (academic) | 'activity' (generic)
+  const [subjectModalMode, setSubjectModalMode] = useState('subject');
+
   // Load all master datasets — scoped to active department
   const fetchAllData = async () => {
     setLoading(true);
@@ -154,6 +157,7 @@ export default function AdminMasterData() {
     if (activeSubTab === 'semesters') setFormData({ number: 3, department_id: defaultDeptId, class_room: '', academic_year: '2025-2026', class_advisor: '', mentors: '' });
     if (activeSubTab === 'subjects') {
       const chosenSemId = defaultSemesterId || (subjectSemesterFilter !== 'all' ? subjectSemesterFilter : (filteredSemesters[0]?.id || ''));
+      setSubjectModalMode('subject');
       setFormData({
         subject_code: '',
         name: '',
@@ -175,7 +179,11 @@ export default function AdminMasterData() {
     if (activeSubTab === 'departments') setFormData({ name: item.name, code: item.code || '' });
     if (activeSubTab === 'faculty') setFormData({ faculty_code: item.faculty_code, name: item.name, password: '', role: item.role, department_id: item.department_id });
     if (activeSubTab === 'semesters') setFormData({ number: item.number, department_id: item.department_id, class_room: item.class_room, academic_year: item.academic_year, class_advisor: item.class_advisor || '', mentors: item.mentors || '' });
-    if (activeSubTab === 'subjects') setFormData({ subject_code: item.subject_code, name: item.name, semester_id: item.semester_id, faculty_id: item.faculty_id, weekly_hours: item.weekly_hours, is_lab: item.is_lab, is_parallel_activity: Boolean(item.is_parallel_activity), is_generic_activity: Boolean(item.is_generic_activity) });
+    if (activeSubTab === 'subjects') {
+      const isGeneric = Boolean(item.is_generic_activity);
+      setSubjectModalMode(isGeneric ? 'activity' : 'subject');
+      setFormData({ subject_code: item.subject_code, name: item.name, semester_id: item.semester_id, faculty_id: item.faculty_id || '', weekly_hours: item.weekly_hours, is_lab: item.is_lab || false, is_parallel_activity: Boolean(item.is_parallel_activity), is_generic_activity: isGeneric });
+    }
     if (activeSubTab === 'timeslots') setFormData({ day: item.day, period_number: item.period_number, start_time: item.start_time, end_time: item.end_time });
     setIsModalOpen(true);
   };
@@ -185,10 +193,10 @@ export default function AdminMasterData() {
     e.preventDefault();
     if (activeSubTab === 'subjects') {
       if (!formData.semester_id) {
-        addToast('Please select a valid semester for this subject. If none exist in this department, create a semester first.', 'error');
+        addToast('Please select a valid semester. Create a semester first if none exist.', 'error');
         return;
       }
-      if (!formData.faculty_id) {
+      if (subjectModalMode === 'subject' && !formData.faculty_id) {
         addToast('Please select a faculty member for this subject.', 'error');
         return;
       }
@@ -516,6 +524,8 @@ export default function AdminMasterData() {
                                           {sub.faculty_code}
                                         </span>
                                       </div>
+                                    ) : sub.is_generic_activity ? (
+                                      <span className="text-xs text-teal-600 font-medium italic">Generic Activity</span>
                                     ) : (
                                       <span className="text-xs text-amber-600 font-medium italic">Unassigned</span>
                                     )}
@@ -524,10 +534,15 @@ export default function AdminMasterData() {
                                     {sub.weekly_hours} hrs/week
                                   </td>
                                   <td className="py-3 px-4">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sub.is_lab ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
-                                      }`}>
-                                      {sub.is_lab ? 'Laboratory' : 'Theory'}
-                                    </span>
+                                    {sub.is_generic_activity ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-800">
+                                        Activity
+                                      </span>
+                                    ) : (
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${sub.is_lab ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                                        {sub.is_lab ? 'Laboratory' : 'Theory'}
+                                      </span>
+                                    )}
                                     {sub.is_parallel_activity && (
                                       <span className="ml-1.5 inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
                                         PARALLEL
@@ -1073,7 +1088,13 @@ export default function AdminMasterData() {
       <Modal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={`${editingItem ? 'Edit' : 'Add New'} ${activeSubTab.slice(0, -1)}`}
+        title={
+          activeSubTab === 'subjects'
+            ? (editingItem
+                ? `Edit ${formData.is_generic_activity ? 'Activity' : 'Subject'}`
+                : (subjectModalMode === 'activity' ? 'Add Generic Activity' : 'Add New Subject'))
+            : `${editingItem ? 'Edit' : 'Add New'} ${activeSubTab.slice(0, -1)}`
+        }
       >
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Faculty Form */}
@@ -1290,120 +1311,221 @@ export default function AdminMasterData() {
             </>
           )}
 
-          {/* Subjects Form */}
+          {/* Subjects Form — Dual-Mode Switcher */}
           {activeSubTab === 'subjects' && (
             <>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Subject Code</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. CS301"
-                    value={formData.subject_code || ''}
-                    onChange={(e) => setFormData({ ...formData, subject_code: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+              {/* Animated mode switcher */}
+              {!editingItem && (
+                <div className="relative flex rounded-xl overflow-hidden bg-slate-100 p-1 gap-0">
+                  {/* Sliding pill background */}
+                  <div
+                    className="absolute top-1 bottom-1 rounded-lg transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+                    style={{
+                      left: subjectModalMode === 'subject' ? '4px' : 'calc(50% + 2px)',
+                      right: subjectModalMode === 'subject' ? 'calc(50% + 2px)' : '4px',
+                      background: 'linear-gradient(135deg, #ea580c 0%, #f97316 45%, #fbbf24 100%)',
+                      boxShadow: '0 2px 12px rgba(234,88,12,0.35)',
+                    }}
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Subject Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Data Structures"
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                  {/* Animated gradient indicator line under active tab */}
+                  <div
+                    className="absolute bottom-1 h-0.5 rounded-full transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]"
+                    style={{
+                      left: subjectModalMode === 'subject' ? '8px' : 'calc(50% + 8px)',
+                      right: subjectModalMode === 'subject' ? 'calc(50% + 8px)' : '8px',
+                      background: 'linear-gradient(90deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0.4) 100%)',
+                    }}
                   />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Semester</label>
-                  {filteredSemesters.length === 0 ? (
-                    <div className="p-2 border border-rose-200 bg-rose-50 rounded-lg text-xs text-rose-700">
-                      No semesters in this department. Please create a semester first.
-                    </div>
-                  ) : (
-                    <select
-                      required
-                      value={formData.semester_id || ''}
-                      onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
-                    >
-                      <option value="">Select Semester</option>
-                      {filteredSemesters.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          Semester {s.number} ({s.class_room}){s.department_name ? ` • ${s.department_name}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Faculty In-Charge</label>
-                  <select
-                    required
-                    value={formData.faculty_id || ''}
-                    onChange={(e) => setFormData({ ...formData, faculty_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubjectModalMode('subject');
+                      setFormData((prev) => ({ ...prev, is_generic_activity: false }));
+                    }}
+                    className="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-300"
+                    style={{ color: subjectModalMode === 'subject' ? '#fff' : '#64748b' }}
                   >
-                    <option value="">Select Faculty</option>
-                    {(filteredFaculty.length > 0 ? filteredFaculty : faculty).map((f) => (
-                      <option key={f.id} value={f.id}>
-                        {f.name} ({f.faculty_code}){f.department_name ? ` • ${f.department_name}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    📚 Academic Subject
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubjectModalMode('activity');
+                      setFormData((prev) => ({
+                        ...prev,
+                        is_generic_activity: true,
+                        is_lab: false,
+                        subject_code: '',
+                        faculty_id: ''
+                      }));
+                    }}
+                    className="relative z-10 flex-1 py-2 text-xs font-bold rounded-lg transition-colors duration-300"
+                    style={{ color: subjectModalMode === 'activity' ? '#fff' : '#64748b' }}
+                  >
+                    🎯 Generic Activity
+                  </button>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 items-center">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Weekly Hours</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="20"
-                    required
-                    value={formData.weekly_hours !== undefined ? formData.weekly_hours : 4}
-                    onChange={(e) => setFormData({ ...formData, weekly_hours: e.target.value === '' ? '' : parseInt(e.target.value, 10) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
-                  />
-                </div>
-                <div className="pt-5">
-                  <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+              )}
+
+              {/* ── ACADEMIC SUBJECT fields ── */}
+              {subjectModalMode === 'subject' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Subject Code</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. CS301"
+                        value={formData.subject_code || ''}
+                        onChange={(e) => setFormData({ ...formData, subject_code: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Subject Name</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Data Structures"
+                        value={formData.name || ''}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Semester</label>
+                      {filteredSemesters.length === 0 ? (
+                        <div className="p-2 border border-rose-200 bg-rose-50 rounded-lg text-xs text-rose-700">
+                          No semesters. Create a semester first.
+                        </div>
+                      ) : (
+                        <select
+                          required
+                          value={formData.semester_id || ''}
+                          onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                        >
+                          <option value="">Select Semester</option>
+                          {filteredSemesters.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              Semester {s.number} ({s.class_room}){s.department_name ? ` • ${s.department_name}` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Faculty In-Charge</label>
+                      <select
+                        required
+                        value={formData.faculty_id || ''}
+                        onChange={(e) => setFormData({ ...formData, faculty_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                      >
+                        <option value="">Select Faculty</option>
+                        {(filteredFaculty.length > 0 ? filteredFaculty : faculty).map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name} ({f.faculty_code}){f.department_name ? ` • ${f.department_name}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 items-center">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Weekly Hours</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="20"
+                        required
+                        value={formData.weekly_hours !== undefined ? formData.weekly_hours : 4}
+                        onChange={(e) => setFormData({ ...formData, weekly_hours: e.target.value === '' ? '' : parseInt(e.target.value, 10) })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                      />
+                    </div>
+                    <div className="pt-5">
+                      <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={formData.is_lab || false}
+                          onChange={(e) => setFormData({ ...formData, is_lab: e.target.checked })}
+                          className="w-4 h-4 text-orange-500 rounded border-slate-300 focus:ring-orange-400"
+                        />
+                        Is Laboratory Session?
+                      </label>
+                    </div>
+                  </div>
+                  {/* Parallel activity flag */}
+                  <div className="pt-1 border-t border-slate-100">
+                    <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_parallel_activity || false}
+                        onChange={(e) => setFormData({ ...formData, is_parallel_activity: e.target.checked })}
+                        className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
+                      />
+                      <span>Parallel Activity <span className="text-xs font-normal text-slate-500">(NSS/PE – two groups share same slot)</span></span>
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {/* ── GENERIC ACTIVITY fields ── */}
+              {subjectModalMode === 'activity' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Activity Name</label>
                     <input
-                      type="checkbox"
-                      checked={formData.is_lab || false}
-                      onChange={(e) => setFormData({ ...formData, is_lab: e.target.checked })}
-                      className="w-4 h-4 text-orange-500 rounded border-slate-300 focus:ring-orange-400"
+                      type="text"
+                      required
+                      placeholder="e.g. Library, Placement, Mentoring"
+                      value={formData.name || ''}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                     />
-                    Is Laboratory Session?
-                  </label>
-                </div>
-              </div>
-              {/* Activity type flags */}
-              <div className="flex flex-col gap-2 pt-1 border-t border-slate-100">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Special Activity Flags</span>
-                <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_parallel_activity || false}
-                    onChange={(e) => setFormData({ ...formData, is_parallel_activity: e.target.checked })}
-                    className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500"
-                  />
-                  <span>Parallel Activity <span className="text-xs font-normal text-slate-500">(NSS/PE – two groups share same slot)</span></span>
-                </label>
-                <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_generic_activity || false}
-                    onChange={(e) => setFormData({ ...formData, is_generic_activity: e.target.checked })}
-                    className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
-                  />
-                  <span>Generic Activity <span className="text-xs font-normal text-slate-500">(Library, Mentoring, Placement – no faculty clash)</span></span>
-                </label>
-              </div>
+                    <p className="mt-1 text-[11px] text-slate-400">A unique code will be auto-generated (e.g. ACT-LIB)</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Semester</label>
+                    {filteredSemesters.length === 0 ? (
+                      <div className="p-2 border border-rose-200 bg-rose-50 rounded-lg text-xs text-rose-700">
+                        No semesters. Create a semester first.
+                      </div>
+                    ) : (
+                      <select
+                        required
+                        value={formData.semester_id || ''}
+                        onChange={(e) => setFormData({ ...formData, semester_id: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                      >
+                        <option value="">Select Semester</option>
+                        {filteredSemesters.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            Semester {s.number} ({s.class_room}){s.department_name ? ` • ${s.department_name}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">Hours per Week</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      required
+                      value={formData.weekly_hours !== undefined ? formData.weekly_hours : 2}
+                      onChange={(e) => setFormData({ ...formData, weekly_hours: e.target.value === '' ? '' : parseInt(e.target.value, 10) })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-400">No faculty clash is applied — activity fills free slots only.</p>
+                  </div>
+                </>
+              )}
             </>
           )}
 
