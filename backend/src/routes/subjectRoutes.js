@@ -8,6 +8,7 @@ router.get('/', authenticateToken, subjectController.getAllSubjects);
 router.get('/:id', authenticateToken, subjectController.getSubjectById);
 router.post('/', authenticateToken, requireRole('admin'), subjectController.createSubject);
 router.put('/:id', authenticateToken, requireRole('admin'), subjectController.updateSubject);
+router.delete('/all', authenticateToken, requireRole('admin'), subjectController.deleteAllSubjects);
 router.delete('/:id', authenticateToken, requireRole('admin'), subjectController.deleteSubject);
 
 module.exports = router;

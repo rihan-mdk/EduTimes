@@ -199,10 +199,31 @@ async function deleteSubject(req, res) {
   }
 }
 
+async function deleteAllSubjects(req, res) {
+  try {
+    const department_id = req.query.department_id || req.body.department_id;
+    let result;
+    if (department_id) {
+      result = await db.query(
+        'DELETE FROM subject WHERE semester_id IN (SELECT id FROM semester WHERE department_id = $1) RETURNING id',
+        [department_id]
+      );
+    } else {
+      result = await db.query('DELETE FROM subject RETURNING id');
+    }
+    const count = result.rows.length;
+    res.json({ message: `Successfully deleted ${count} subjects`, count });
+  } catch (err) {
+    console.error('❌ [Subject Delete All Error]:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 module.exports = {
   getAllSubjects,
   getSubjectById,
   createSubject,
   updateSubject,
-  deleteSubject
+  deleteSubject,
+  deleteAllSubjects
 };

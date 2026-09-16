@@ -182,10 +182,61 @@ async function deleteFaculty(req, res) {
   }
 }
 
+async function deleteAllFaculty(req, res) {
+  try {
+    const department_id = req.query.department_id || req.body.department_id;
+    const currentUserId = req.user?.id;
+
+    // 1. Delete dependent subjects for this department to satisfy foreign key (faculty_id RESTRICT)
+    if (department_id) {
+      await db.query(
+        'DELETE FROM subject WHERE semester_id IN (SELECT id FROM semester WHERE department_id = $1)',
+        [department_id]
+      );
+    } else {
+      await db.query('DELETE FROM subject');
+    }
+
+    // 2. Delete non-admin faculty in department, never deleting current admin
+    let result;
+    if (department_id) {
+      if (currentUserId) {
+        result = await db.query(
+          "DELETE FROM faculty WHERE department_id = $1 AND role != 'admin' AND id != $2 RETURNING id, faculty_code, name",
+          [department_id, currentUserId]
+        );
+      } else {
+        result = await db.query(
+          "DELETE FROM faculty WHERE department_id = $1 AND role != 'admin' RETURNING id, faculty_code, name",
+          [department_id]
+        );
+      }
+    } else {
+      if (currentUserId) {
+        result = await db.query(
+          "DELETE FROM faculty WHERE role != 'admin' AND id != $1 RETURNING id, faculty_code, name",
+          [currentUserId]
+        );
+      } else {
+        result = await db.query(
+          "DELETE FROM faculty WHERE role != 'admin' RETURNING id, faculty_code, name"
+        );
+      }
+    }
+
+    const count = result.rows.length;
+    res.json({ message: `Successfully deleted ${count} faculty members`, count, deleted: result.rows });
+  } catch (err) {
+    console.error('❌ [Faculty Delete All Error]:', err);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 module.exports = {
   getAllFaculty,
   getFacultyById,
   createFaculty,
   updateFaculty,
-  deleteFaculty
+  deleteFaculty,
+  deleteAllFaculty
 };

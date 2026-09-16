@@ -93,6 +93,10 @@ export const api = {
   },
   updateFaculty: (id, data) => apiRequest(`/faculty/${id}`, { method: 'PUT', body: data }),
   deleteFaculty: (id) => apiRequest(`/faculty/${id}`, { method: 'DELETE' }),
+  deleteAllFaculty: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/faculty/all${qs ? `?${qs}` : ''}`, { method: 'DELETE' });
+  },
 
   // Semesters
   getSemesters: (params = {}) => {
@@ -111,6 +115,10 @@ export const api = {
   createSubject: (data) => apiRequest('/subjects', { method: 'POST', body: data }),
   updateSubject: (id, data) => apiRequest(`/subjects/${id}`, { method: 'PUT', body: data }),
   deleteSubject: (id) => apiRequest(`/subjects/${id}`, { method: 'DELETE' }),
+  deleteAllSubjects: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/subjects/all${qs ? `?${qs}` : ''}`, { method: 'DELETE' });
+  },
 
   // Timeslots
   getTimeslots: () => apiRequest('/timeslots'),

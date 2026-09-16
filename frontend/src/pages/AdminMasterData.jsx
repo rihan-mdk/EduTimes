@@ -53,6 +53,10 @@ export default function AdminMasterData() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
 
+  // Bulk Delete Confirmation modal
+  const [bulkDeleteType, setBulkDeleteType] = useState(null); // 'subjects' | 'faculty' | null
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // Load all master datasets — scoped to active department
   const fetchAllData = async () => {
     setLoading(true);
@@ -249,6 +253,28 @@ export default function AdminMasterData() {
     }
   };
 
+  // Bulk Delete Action (Remove All Subjects / Faculty in Department)
+  const handleBulkDelete = async () => {
+    if (!bulkDeleteType) return;
+    setBulkDeleting(true);
+    try {
+      const deptId = activeDepartment?.id;
+      if (bulkDeleteType === 'subjects') {
+        const res = await api.deleteAllSubjects(deptId ? { department_id: deptId } : {});
+        addToast(res.message || 'All subjects removed successfully', 'success');
+      } else if (bulkDeleteType === 'faculty') {
+        const res = await api.deleteAllFaculty(deptId ? { department_id: deptId } : {});
+        addToast(res.message || 'All faculty removed successfully', 'success');
+      }
+      setBulkDeleteType(null);
+      await fetchAllData();
+    } catch (err) {
+      addToast(err.message || 'Bulk delete failed', 'error');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Sub-Navigation Tabs */}
@@ -288,13 +314,39 @@ export default function AdminMasterData() {
           </button>
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add New {activeSubTab.slice(0, -1)}
-        </button>
+        <div className="flex items-center gap-2.5">
+          {activeSubTab === 'subjects' && filteredSubjects.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setBulkDeleteType('subjects')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-rose-600 bg-white hover:bg-rose-50/60 border border-slate-200 hover:border-rose-200 rounded-lg transition-colors shadow-xs"
+              title="Remove all subjects in this department"
+            >
+              <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />
+              <span>Remove All Subjects</span>
+            </button>
+          )}
+
+          {activeSubTab === 'faculty' && filteredFaculty.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setBulkDeleteType('faculty')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-rose-600 bg-white hover:bg-rose-50/60 border border-slate-200 hover:border-rose-200 rounded-lg transition-colors shadow-xs"
+              title="Remove all faculty in this department"
+            >
+              <Trash2 className="w-4 h-4 text-slate-400 group-hover:text-rose-500" />
+              <span>Remove All Faculty</span>
+            </button>
+          )}
+
+          <button
+            onClick={handleOpenAddModal}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add New {activeSubTab.slice(0, -1)}
+          </button>
+        </div>
       </div>
 
       {/* Main Table Content */}
@@ -1457,6 +1509,62 @@ export default function AdminMasterData() {
               className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
             >
               Confirm Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(bulkDeleteType)}
+        onClose={() => !bulkDeleting && setBulkDeleteType(null)}
+        title={bulkDeleteType === 'subjects' ? 'Remove All Subjects' : 'Remove All Faculty'}
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 text-rose-600 bg-rose-50 p-3.5 rounded-xl border border-rose-100">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-rose-600" />
+            <div className="text-sm text-rose-950 space-y-1">
+              <p className="font-semibold">
+                {bulkDeleteType === 'subjects'
+                  ? `Are you sure you want to remove all ${filteredSubjects.length} subjects?`
+                  : `Are you sure you want to remove all ${filteredFaculty.filter(f => f.role !== 'admin').length} faculty members?`}
+              </p>
+              <p className="text-xs text-rose-800/90 leading-relaxed">
+                {bulkDeleteType === 'subjects'
+                  ? 'This will delete all subjects in this department along with their associated timetable schedule entries. This action cannot be undone.'
+                  : 'This will remove all faculty in this department along with dependent subjects and schedule slots. Administrator accounts will be preserved.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              disabled={bulkDeleting}
+              onClick={() => setBulkDeleteType(null)}
+              className="px-4 py-2 border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={bulkDeleting}
+              onClick={handleBulkDelete}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors disabled:opacity-50"
+            >
+              {bulkDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Removing...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-4 h-4" />
+                  <span>
+                    {bulkDeleteType === 'subjects' ? 'Remove All Subjects' : 'Remove All Faculty'}
+                  </span>
+                </>
+              )}
             </button>
           </div>
         </div>

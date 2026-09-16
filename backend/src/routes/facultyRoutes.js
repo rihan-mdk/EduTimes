@@ -8,6 +8,7 @@ router.get('/', authenticateToken, facultyController.getAllFaculty);
 router.get('/:id', authenticateToken, facultyController.getFacultyById);
 router.post('/', authenticateToken, requireRole('admin'), facultyController.createFaculty);
 router.put('/:id', authenticateToken, requireRole('admin'), facultyController.updateFaculty);
+router.delete('/all', authenticateToken, requireRole('admin'), facultyController.deleteAllFaculty);
 router.delete('/:id', authenticateToken, requireRole('admin'), facultyController.deleteFaculty);
 
 module.exports = router;
