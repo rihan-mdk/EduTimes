@@ -137,9 +137,14 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     return a.semester_id - b.semester_id;
   });
 
-  // Sort single-hour demands: parallel subjects together, then higher faculty load, then labs
+  // Sort single-hour demands: parallel subjects together, then highest weekly hours, then faculty load, then labs
   singleDemands.sort((a, b) => {
     if (b.is_parallel !== a.is_parallel) return b.is_parallel ? 1 : -1;
+    const subA = subjectsMap.get(a.subject_id);
+    const subB = subjectsMap.get(b.subject_id);
+    const hoursA = Number(subA?.weekly_hours) || 0;
+    const hoursB = Number(subB?.weekly_hours) || 0;
+    if (hoursB !== hoursA) return hoursB - hoursA;
     const loadDiff = (facultyTotalHours[b.faculty_id] || 0) - (facultyTotalHours[a.faculty_id] || 0);
     if (loadDiff !== 0) return loadDiff;
     if (b.is_lab !== a.is_lab) return b.is_lab ? 1 : -1;
@@ -258,7 +263,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   existingEntries.forEach(recordAssignment);
 
   let stepsExplored = 0;
-  const MAX_STEPS = 500000; // Search limit
+  const MAX_STEPS = 60000; // Search limit
 
   /**
    * Recursive Backtracking Solver
@@ -270,7 +275,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     }
 
     stepsExplored++;
-    if (stepsExplored > MAX_STEPS) {
+    if (stepsExplored > MAX_STEPS || (stepsExplored % 1000 === 0 && Date.now() - startTime > 4500)) {
       return false;
     }
 
@@ -304,10 +309,11 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           continue;
         }
 
-        // Daily lab constraint: at most 1 lab session per day per semester (no two labs in a day)
+        // Daily lab constraint: allow sessions sized appropriately for the lab's weekly demand
+        const maxLabHoursPerDay = Math.max(3, Math.ceil(weeklyHours / 5));
         if (demand.is_lab) {
           const labKey = `${demand.semester_id}_${day}`;
-          if ((semesterDayLabs.get(labKey) || 0) > 0) {
+          if ((semesterDayLabs.get(labKey) || 0) >= maxLabHoursPerDay) {
             continue;
           }
         }
@@ -434,16 +440,17 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       const currentDayHours = subjectDayHours.get(dayKey) || 0;
       const weeklyHours = Number(candidateSubject?.weekly_hours) || 0;
 
-      // Max 1 hour per day for low-hour subjects, max 2 hours per day for heavy subjects (e.g. 7 hrs/week)
-      const maxAllowedPerDay = weeklyHours > 6 ? 2 : (weeklyHours > 4 ? 2 : 1);
+      // Dynamic max allowed hours per day (supports high-demand subjects up to 20h/week)
+      const maxAllowedPerDay = Math.max(2, Math.ceil(weeklyHours / 5));
       if (!demand.is_lab && currentDayHours >= maxAllowedPerDay) {
         continue;
       }
 
-      // Daily lab constraint: at most 1 lab session per day per semester (no two labs in a day)
+      // Daily lab constraint: allow sessions sized appropriately for the lab's weekly demand
+      const maxLabHoursPerDay = Math.max(3, Math.ceil(weeklyHours / 5));
       if (demand.is_lab) {
         const labKey = `${demand.semester_id}_${ts.day}`;
-        if ((semesterDayLabs.get(labKey) || 0) > 0) {
+        if ((semesterDayLabs.get(labKey) || 0) >= maxLabHoursPerDay) {
           continue;
         }
       }
