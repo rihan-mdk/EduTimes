@@ -7,6 +7,7 @@ import AdminTimetable from './pages/AdminTimetable';
 import AdminMasterData from './pages/AdminMasterData';
 import FacultyDashboard from './pages/FacultyDashboard';
 import SplashScreen from './components/SplashScreen';
+import DebugPanel from './components/DebugPanel';
 import { Loader2 } from 'lucide-react';
 
 export default function App() {
@@ -58,9 +59,14 @@ export default function App() {
     );
   }
 
-  // Protected Route: If unauthenticated, always render Login page
+  // Protected Route: If unauthenticated, render Login page with DebugPanel available
   if (!isAuthenticated || !user) {
-    return <Login />;
+    return (
+      <>
+        <Login />
+        <DebugPanel />
+      </>
+    );
   }
 
   return (
@@ -79,6 +85,9 @@ export default function App() {
           <FacultyDashboard />
         )}
       </main>
+
+      {/* Developer Debug Panel (Toggle with Ctrl + D) */}
+      <DebugPanel />
     </div>
   );
 }

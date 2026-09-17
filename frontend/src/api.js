@@ -2,6 +2,8 @@
  * Centralized API client for YenSync
  */
 
+import { debugLogger } from './utils/debugLogger';
+
 // In production: set VITE_API_URL=https://your-app.railway.app in Vercel env vars
 // In local dev: falls back to '/api' (proxied by Vite to localhost:5000)
 const API_BASE = import.meta.env.VITE_API_URL
@@ -9,6 +11,10 @@ const API_BASE = import.meta.env.VITE_API_URL
   : '/api';
 
 export async function apiRequest(endpoint, options = {}) {
+  const startTime = Date.now();
+  const method = (options.method || 'GET').toUpperCase();
+  const rawBody = options.body;
+
   const token = localStorage.getItem('yensync_token');
   const headers = {
     'Content-Type': 'application/json',
@@ -28,16 +34,31 @@ export async function apiRequest(endpoint, options = {}) {
   try {
     const response = await fetch(`${API_BASE}${endpoint}`, config);
     const data = await response.json().catch(() => ({}));
+    const duration = Date.now() - startTime;
 
     if (!response.ok) {
       const error = new Error(data.error || `HTTP Error ${response.status}`);
       error.status = response.status;
       error.data = data;
+
+      debugLogger.logApiFailure({
+        endpoint,
+        method,
+        status: response.status,
+        statusText: response.statusText,
+        duration,
+        requestBody: rawBody,
+        responseBody: data,
+        error,
+      });
+
       throw error;
     }
 
     return data;
   } catch (err) {
+    const duration = Date.now() - startTime;
+
     // Detect network-level failures (server down, CORS preflight blocked, cold start).
     // These appear as TypeError: "Failed to fetch" with no HTTP status — the browser
     // cannot reach the server at all, so no CORS headers are received.
@@ -46,8 +67,35 @@ export async function apiRequest(endpoint, options = {}) {
         'Unable to reach the server. It may be starting up — please wait a few seconds and try again.'
       );
       friendly.isNetworkError = true;
+
+      debugLogger.logApiFailure({
+        endpoint,
+        method,
+        status: 0,
+        statusText: 'Network Error / Cold Start',
+        duration,
+        requestBody: rawBody,
+        responseBody: null,
+        error: err,
+      });
+
       throw friendly;
     }
+
+    // Log if it wasn't already logged above
+    if (!err.status) {
+      debugLogger.logApiFailure({
+        endpoint,
+        method,
+        status: 0,
+        statusText: 'Client Error',
+        duration,
+        requestBody: rawBody,
+        responseBody: null,
+        error: err,
+      });
+    }
+
     if (err.status === 401) {
       // Auto logout on token expiration
       localStorage.removeItem('yensync_token');
