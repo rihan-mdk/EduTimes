@@ -186,4 +186,127 @@ aimlSubjects.filter(s => s.block_session_count > 0).forEach(sub => {
 });
 
 console.log(`\n🎉 Full AIML Dataset: Successfully scheduled ${aimlResult.schedule.length} slots in ${aimlResult.stats.durationMs}ms with 0 clashes!`);
-console.log('🎉 All Scheduler Tests Passed!\n');
+
+// =========================================================================
+// Lab Placement Window Tests (BUG FIX Verification)
+// =========================================================================
+console.log('\n🧪 Testing Lab Placement Constraints (No Labs in Period 1 & 2)...');
+
+// 1. Regression Test: Assert that no subject with is_lab = true appears in Period 1 or Period 2 on any day
+const labSubjectIds = new Set(aimlSubjects.filter(s => s.is_lab).map(s => s.id));
+let labCount = 0;
+for (const entry of aimlResult.schedule) {
+  if (labSubjectIds.has(entry.subject_id)) {
+    labCount++;
+    const ts = timeslotsMap.get(entry.timeslot_id);
+    assert.ok(
+      ts.period_number !== 1 && ts.period_number !== 2,
+      `Violation: Lab subject ${entry.subject_id} was scheduled in ${ts.day} Period ${ts.period_number}! Labs must NEVER be placed in Period 1 or 2.`
+    );
+    // Assert it is strictly in allowed windows: Period 3, 4, 5, 6, or 7
+    assert.ok(
+      ts.period_number >= 3 && ts.period_number <= 7,
+      `Lab subject ${entry.subject_id} placed in unexpected period: ${ts.period_number}`
+    );
+  }
+}
+assert.ok(labCount > 0, 'Expected at least one lab to be scheduled and verified');
+console.log(`  ✅ Regression Test Passed: All ${labCount} lab periods placed strictly in allowed windows (Periods 3-7), 0 in Periods 1-2.`);
+
+// Verify non-lab block subjects CAN still be placed in Period 1-2
+const nonLabBlockIds = new Set(aimlSubjects.filter(s => !s.is_lab && s.block_session_count > 0).map(s => s.id));
+const nonLabBlockInP1P2 = aimlResult.schedule.some(e => {
+  if (!nonLabBlockIds.has(e.subject_id)) return false;
+  const ts = timeslotsMap.get(e.timeslot_id);
+  return ts.period_number === 1 || ts.period_number === 2;
+});
+console.log(`  ✅ Non-lab block subjects can still utilize Period 1-2: ${nonLabBlockInP1P2}`);
+
+// 2. Edge-case Test: Pre-fill Period 3-4 and both afternoon windows for a semester.
+// Confirm solver reports an unschedulable state for that lab rather than placing it in Period 1-2.
+console.log('🧪 Testing Lab Edge Case: Allowed windows full -> solver fails rather than placing in Period 1-2...');
+
+const edgeSemester = [{ id: 99, number: 1, class_room: 'L-101', academic_year: '2026-27' }];
+// 1 day with 7 periods
+const singleDayTimeslots = [
+  { id: 1001, day: 'Monday', period_number: 1, start_time: '09:00', end_time: '09:55' },
+  { id: 1002, day: 'Monday', period_number: 2, start_time: '09:55', end_time: '10:50' },
+  { id: 1003, day: 'Monday', period_number: 3, start_time: '11:10', end_time: '12:05' },
+  { id: 1004, day: 'Monday', period_number: 4, start_time: '12:05', end_time: '13:00' },
+  { id: 1005, day: 'Monday', period_number: 5, start_time: '13:50', end_time: '14:40' },
+  { id: 1006, day: 'Monday', period_number: 6, start_time: '14:40', end_time: '15:30' },
+  { id: 1007, day: 'Monday', period_number: 7, start_time: '15:30', end_time: '16:15' },
+];
+
+// Pre-fill Periods 3, 4, 5, 6, 7 so ONLY Period 1 & 2 are open
+const prefilledEntries = [
+  { subject_id: 991, semester_id: 99, timeslot_id: 1003, faculty_id: 91, academic_year: '2026-27' },
+  { subject_id: 991, semester_id: 99, timeslot_id: 1004, faculty_id: 91, academic_year: '2026-27' },
+  { subject_id: 992, semester_id: 99, timeslot_id: 1005, faculty_id: 92, academic_year: '2026-27' },
+  { subject_id: 992, semester_id: 99, timeslot_id: 1006, faculty_id: 92, academic_year: '2026-27' },
+  { subject_id: 993, semester_id: 99, timeslot_id: 1007, faculty_id: 93, academic_year: '2026-27' },
+];
+
+const labSubjectToTest = [
+  {
+    id: 999,
+    semester_id: 99,
+    subject_code: 'LAB999',
+    name: 'Test Lab',
+    faculty_id: 99,
+    weekly_hours: 2,
+    is_lab: true,
+    block_session_hours: 2,
+    block_session_count: 1
+  }
+];
+
+const edgeResult = generateTimetable({
+  semesters: edgeSemester,
+  subjects: labSubjectToTest,
+  timeslots: singleDayTimeslots,
+  academicYear: '2026-27',
+  existingEntries: prefilledEntries
+});
+
+assert.strictEqual(
+  edgeResult.success,
+  false,
+  'Expected scheduler to fail when lab allowed windows are full, but it succeeded (potentially placed in Period 1-2)!'
+);
+console.log('  ✅ Edge-Case Test Passed: Solver correctly reported unschedulable state and refused to place lab in Period 1-2.');
+
+// Also confirm that if the subject is NOT a lab, it CAN be placed in Period 1-2
+const nonLabSubjectToTest = [
+  {
+    id: 998,
+    semester_id: 99,
+    subject_code: 'BLOCK998',
+    name: 'Test Non-Lab Block',
+    faculty_id: 99,
+    weekly_hours: 2,
+    is_lab: false,
+    block_session_hours: 2,
+    block_session_count: 1
+  }
+];
+
+const nonLabEdgeResult = generateTimetable({
+  semesters: edgeSemester,
+  subjects: nonLabSubjectToTest,
+  timeslots: singleDayTimeslots,
+  academicYear: '2026-27',
+  existingEntries: prefilledEntries
+});
+
+assert.strictEqual(
+  nonLabEdgeResult.success,
+  true,
+  'Non-lab block subject should be able to utilize Period 1-2 when other windows are full!'
+);
+// 1 block of 2 hours + 5 prefilled entries = 7 total entries
+assert.strictEqual(nonLabEdgeResult.schedule.length, 2 + prefilledEntries.length);
+console.log('  ✅ Edge-Case Test Passed: Non-lab block subject successfully placed in Period 1-2 as expected.');
+
+console.log('\n🎉 All Scheduler Tests Passed!\n');
+

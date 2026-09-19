@@ -155,7 +155,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   const slotDemands = [...blockDemands, ...singleDemands];
 
   // Precompute candidate consecutive slot windows for block demands
-  function getCandidateConsecutiveWindows(length) {
+  function getCandidateConsecutiveWindows(length, isLab = false) {
     const windows = [];
     for (const [day, daySlots] of timeslotsByDay.entries()) {
       for (let i = 0; i <= daySlots.length - length; i++) {
@@ -167,18 +167,41 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           }
         }
         if (isConsecutive) {
-          windows.push(daySlots.slice(i, i + length));
+          const win = daySlots.slice(i, i + length);
+          if (isLab) {
+            // Lab placement-window constraint:
+            // Valid windows are strictly:
+            // - Period 3 & 4 (late morning, before lunch, start period 3)
+            // - Period 5 & 6, or Period 6 & 7 (afternoon, after lunch, start period 5 or 6)
+            // Period 1-2 is excluded from candidate positions considered for labs specifically.
+            const startPeriod = win[0].period_number;
+            if (length === 2) {
+              if (startPeriod === 3 || startPeriod === 5 || startPeriod === 6) {
+                windows.push(win);
+              }
+            } else if (startPeriod >= 3) {
+              // Ensure any longer block does not start in Period 1-2 and does not cross lunch break (P4-P5)
+              const endPeriod = win[win.length - 1].period_number;
+              if (!(startPeriod <= 4 && endPeriod >= 5)) {
+                windows.push(win);
+              }
+            }
+          } else {
+            windows.push(win);
+          }
         }
       }
     }
     return windows;
   }
 
-  // Cache candidate block windows by block length
+  // Cache candidate block windows by block length (separately for normal blocks and lab blocks)
   const blockWindowsByLength = new Map();
+  const labBlockWindowsByLength = new Map();
   const uniqueBlockLengths = new Set(blockDemands.map(d => d.block_hours));
   uniqueBlockLengths.forEach(len => {
-    blockWindowsByLength.set(len, getCandidateConsecutiveWindows(len));
+    blockWindowsByLength.set(len, getCandidateConsecutiveWindows(len, false));
+    labBlockWindowsByLength.set(len, getCandidateConsecutiveWindows(len, true));
   });
 
   // Current Schedule state
@@ -287,7 +310,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     // -------------------------------------------------------------
     if (demand.type === 'BLOCK') {
       const length = demand.block_hours;
-      const candidateWindows = blockWindowsByLength.get(length) || [];
+      const candidateWindows = (demand.is_lab ? labBlockWindowsByLength : blockWindowsByLength).get(length) || [];
 
       // Sort candidate windows dynamically: prefer days with fewer hours for this subject
       const sortedWindows = [...candidateWindows].sort((winA, winB) => {
@@ -412,6 +435,11 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     });
 
     for (const ts of candidateTimeslots) {
+      // Labs must never be placed in Period 1 or Period 2
+      if (demand.is_lab && (ts.period_number === 1 || ts.period_number === 2)) {
+        continue;
+      }
+
       // 1. Faculty busy check
       const facSlots = facultyOccupied.get(demand.faculty_id);
       if (facSlots && facSlots.has(ts.id)) {

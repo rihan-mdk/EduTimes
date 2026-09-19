@@ -626,6 +626,19 @@ export default function AdminTimetable() {
           });
         }
         addToast(`Undone: Restored replaced subject(s) and returned ${movedEntry.subjectCode}`, 'success');
+      } else if (lastAction.type === 'REMOVE') {
+        const { deletedEntries } = lastAction.data;
+        for (const entry of deletedEntries) {
+          await api.createTimetableEntry({
+            subject_id: entry.subject_id,
+            semester_id: entry.semester_id,
+            timeslot_id: entry.timeslot_id,
+            academic_year: entry.academic_year,
+            session_type: entry.session_type,
+            replace_slot: false,
+          });
+        }
+        addToast(`Undone: Restored removed subject(s)`, 'success');
       }
 
       setLastAction(null);
@@ -634,6 +647,46 @@ export default function AdminTimetable() {
       addToast(err.data?.error || err.message || 'Failed to undo action', 'error');
     } finally {
       setUndoing(false);
+    }
+  };
+
+  // Explicit remove handler for slots (single, parallel, or atomic block sessions)
+  const handleRemoveSlot = async (entryOrEntries, e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const entriesToRemove = Array.isArray(entryOrEntries) ? entryOrEntries : (entryOrEntries ? [entryOrEntries] : []);
+    if (entriesToRemove.length === 0) return;
+
+    setMovingSlot(true);
+    try {
+      for (const entry of entriesToRemove) {
+        await api.deleteTimetableEntry(entry.id);
+      }
+
+      const codes = [...new Set(entriesToRemove.map(it => it.subject_code).filter(Boolean))].join(', ');
+      setLastAction({
+        type: 'REMOVE',
+        description: `Remove ${codes || 'slot'}`,
+        data: {
+          deletedEntries: entriesToRemove.map(entry => ({
+            subject_id: entry.subject_id,
+            semester_id: entry.semester_id,
+            timeslot_id: entry.timeslot_id,
+            academic_year: entry.academic_year,
+            session_type: entry.session_type || (entry.is_lab ? 'lab' : 'theory'),
+            subject_code: entry.subject_code,
+          })),
+        },
+      });
+
+      addToast(`Removed ${codes || 'slot'} successfully.`, 'success');
+      fetchTimetable();
+    } catch (err) {
+      addToast(err.data?.error || err.message || 'Failed to remove slot', 'error');
+    } finally {
+      setMovingSlot(false);
     }
   };
   // ── End Drag & Drop ────────────────────────────────────────────
@@ -677,20 +730,38 @@ export default function AdminTimetable() {
     }
   };
 
-  // Quick delete single occupant from slot
+  // Quick delete occupant from slot (handles both single occupants and atomic block sessions)
   const handleDeleteOccupant = async (occupantEntry) => {
     if (!occupantEntry?.id) return;
-    setSavingSlot(true);
-    try {
-      await api.deleteTimetableEntry(occupantEntry.id);
-      addToast(`Removed ${occupantEntry.subject_code} from this slot.`, 'success');
-      setEditModalOpen(false);
-      fetchTimetable();
-    } catch (err) {
-      addToast(err.message || 'Failed to remove occupant', 'error');
-    } finally {
-      setSavingSlot(false);
+    setEditModalOpen(false);
+
+    // Check if this occupant is part of a continuous block/lab session on this day
+    const sub = subjects.find(s => String(s.id) === String(occupantEntry.subject_id));
+    const isBlockOrLab = Boolean(
+      occupantEntry.is_lab ||
+      occupantEntry.session_type === 'lab' ||
+      sub?.is_lab ||
+      (sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1))
+    );
+
+    let entriesToRemove = [occupantEntry];
+    if (isBlockOrLab && selectedSlot) {
+      const curDay = selectedSlot.day;
+      const allDayEntries = [];
+      for (let p = 1; p <= 7; p++) {
+        const es = gridMap.get(`${curDay}_${p}`) || [];
+        es.forEach(e => {
+          if (String(e.subject_id) === String(occupantEntry.subject_id)) {
+            allDayEntries.push(e);
+          }
+        });
+      }
+      if (allDayEntries.length > 1) {
+        entriesToRemove = allDayEntries;
+      }
     }
+
+    await handleRemoveSlot(entriesToRemove);
   };
 
   // 4. Validate move / check clash when changing subject in slot modal
@@ -1456,11 +1527,19 @@ export default function AdminTimetable() {
                           timeRange={mergeInfo.timeRange}
                           span={mergeInfo.span}
                           onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
+                          onRemove={(e) => {
+                            const blockEntries = [];
+                            for (let s = 0; s < mergeInfo.span; s++) {
+                              (gridMap.get(`${day}_${p + s}`) || []).forEach(item => blockEntries.push(item));
+                            }
+                            handleRemoveSlot(blockEntries, e);
+                          }}
                         />
                       ) : (
                         <SlotCell
                           entries={gridMap.get(`${day}_${p}`)}
                           onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
+                          onRemove={(entry, e) => handleRemoveSlot(entry, e)}
                         />
                       )}
                     </td>
@@ -2286,7 +2365,7 @@ const SESSION_STYLES = {
 };
 
 // Merged Lab Cell — rendered when 2 or 3 consecutive periods share the same lab/block subject.
-function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
+function MergedLabCell({ entry, timeRange, span = 2, onDragStart, onRemove }) {
   if (!entry) {
     return (
       <div className="h-14 sm:h-15 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-medium transition-colors">
@@ -2312,6 +2391,16 @@ function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
       onClick={(e) => e.stopPropagation()}
       className={`group relative h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${cardBg}`}
     >
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(e); }}
+          title="Remove block session"
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+        >
+          ✕
+        </button>
+      )}
       <div className="flex items-center justify-between gap-1">
         <span className={`font-bold text-xs ${textCode} truncate tracking-tight`}>{entry.subject_code}</span>
         <div className="flex items-center gap-1 shrink-0">
@@ -2328,7 +2417,7 @@ function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
 }
 
 // Compact Slot Renderer — shows subject code, faculty, session badge & duration.
-function SlotCell({ entries, onDragStart }) {
+function SlotCell({ entries, onDragStart, onRemove }) {
   const items = Array.isArray(entries) ? entries : (entries ? [entries] : []);
 
   if (items.length === 0) {
@@ -2349,10 +2438,22 @@ function SlotCell({ entries, onDragStart }) {
             draggable
             onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center justify-between px-1.5 py-0.5 bg-white/90 rounded border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition text-[10px]"
+            className="group relative flex items-center justify-between px-1.5 py-0.5 bg-white/90 rounded border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition text-[10px]"
           >
             <span className="font-mono font-bold text-purple-900 truncate">{entry.subject_code}</span>
-            <span className="text-[8.5px] font-bold text-purple-700 bg-purple-100 px-1 rounded shrink-0">PAR</span>
+            <div className="flex items-center gap-1 shrink-0">
+              <span className="text-[8.5px] font-bold text-purple-700 bg-purple-100 px-1 rounded">PAR</span>
+              {onRemove && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(entry, e); }}
+                  title="Remove activity"
+                  className="w-3.5 h-3.5 rounded-full bg-red-100 hover:bg-red-500 text-red-600 hover:text-white flex items-center justify-center text-[8px] font-bold transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>
@@ -2368,8 +2469,18 @@ function SlotCell({ entries, onDragStart }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className={`h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
+      className={`group relative h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
     >
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(entry, e); }}
+          title="Remove slot"
+          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+        >
+          ✕
+        </button>
+      )}
       <div className="flex items-center justify-between gap-1">
         <span className="font-bold text-xs tracking-tight truncate">{entry.subject_code}</span>
         <span className={`text-[9px] font-bold uppercase px-1 py-0.2 rounded shrink-0 ${style.badge}`}>
