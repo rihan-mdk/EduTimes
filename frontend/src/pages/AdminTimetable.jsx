@@ -160,6 +160,28 @@ export default function AdminTimetable() {
   const [lastAction, setLastAction] = useState(null); // { type, description, data }
   const [undoing, setUndoing] = useState(false);
 
+  // Context Menu state (Right-click slot to remove)
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, day, period, isBlock, span, entries }
+
+  // Dismiss context menu on click outside, scroll, or Escape key
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClose = () => setContextMenu(null);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('click', handleClose);
+    window.addEventListener('contextmenu', handleClose);
+    window.addEventListener('scroll', handleClose, true);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('contextmenu', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu]);
+
   // Semester Info Edit Modal state (Classroom, Advisor, Mentors)
   const [semesterModalOpen, setSemesterModalOpen] = useState(false);
   const [semesterFormData, setSemesterFormData] = useState({ class_room: '', class_advisor: '', mentors: '' });
@@ -1514,6 +1536,35 @@ export default function AdminTimetable() {
                       key={p}
                       colSpan={mergeInfo ? mergeInfo.span : 1}
                       onClick={() => handleSlotClick(day, p)}
+                      onContextMenu={(e) => {
+                        const entries = gridMap.get(`${day}_${p}`) || [];
+                        if (entries.length === 0) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        let blockEntries = entries;
+                        if (mergeInfo) {
+                          blockEntries = [];
+                          for (let s = 0; s < mergeInfo.span; s++) {
+                            (gridMap.get(`${day}_${p + s}`) || []).forEach(item => blockEntries.push(item));
+                          }
+                        }
+
+                        const menuWidth = 240;
+                        const menuHeight = 130;
+                        const x = e.clientX + menuWidth > window.innerWidth ? Math.max(10, window.innerWidth - menuWidth - 10) : e.clientX;
+                        const y = e.clientY + menuHeight > window.innerHeight ? Math.max(10, window.innerHeight - menuHeight - 10) : e.clientY;
+
+                        setContextMenu({
+                          x,
+                          y,
+                          day,
+                          period: p,
+                          isBlock: Boolean(mergeInfo),
+                          span: mergeInfo?.span || 1,
+                          entries: blockEntries,
+                        });
+                      }}
                       onDragOver={(e) => handleDragOver(e, day, p)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, day, p)}
@@ -1527,19 +1578,11 @@ export default function AdminTimetable() {
                           timeRange={mergeInfo.timeRange}
                           span={mergeInfo.span}
                           onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
-                          onRemove={(e) => {
-                            const blockEntries = [];
-                            for (let s = 0; s < mergeInfo.span; s++) {
-                              (gridMap.get(`${day}_${p + s}`) || []).forEach(item => blockEntries.push(item));
-                            }
-                            handleRemoveSlot(blockEntries, e);
-                          }}
                         />
                       ) : (
                         <SlotCell
                           entries={gridMap.get(`${day}_${p}`)}
                           onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
-                          onRemove={(entry, e) => handleRemoveSlot(entry, e)}
                         />
                       )}
                     </td>
@@ -1712,6 +1755,91 @@ export default function AdminTimetable() {
                 No, replace {parallelDialog.targetEntries[0]?.subject_code}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Right-Click Context Menu for Slot Deletion */}
+      {contextMenu && (
+        <div
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+          className="fixed z-50 bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl shadow-xl py-1.5 min-w-[210px] text-xs animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 select-none"
+          onClick={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          {/* Header info */}
+          <div className="px-3 py-1.5 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+            <span>{contextMenu.day} • Period {contextMenu.period}</span>
+            {contextMenu.isBlock && (
+              <span className="text-[9px] bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded font-bold uppercase">
+                {contextMenu.span}h Block
+              </span>
+            )}
+          </div>
+
+          <div className="py-1">
+            {contextMenu.isBlock ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const entries = contextMenu.entries;
+                  setContextMenu(null);
+                  handleRemoveSlot(entries);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50/80 transition-colors text-left cursor-pointer font-semibold"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  Remove {contextMenu.entries[0]?.subject_code} ({contextMenu.span}h Block)
+                </span>
+              </button>
+            ) : contextMenu.entries.length > 1 ? (
+              <>
+                {contextMenu.entries.map((entry, idx) => (
+                  <button
+                    key={entry.id || idx}
+                    type="button"
+                    onClick={() => {
+                      setContextMenu(null);
+                      handleRemoveSlot(entry);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50/80 transition-colors text-left cursor-pointer font-medium"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Remove {entry.subject_code}</span>
+                  </button>
+                ))}
+                <div className="border-t border-slate-100 mt-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const entries = contextMenu.entries;
+                      setContextMenu(null);
+                      handleRemoveSlot(entries);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-700 hover:bg-rose-50/80 transition-colors text-left cursor-pointer font-bold"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Clear Entire Slot (All)</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  const entry = contextMenu.entries[0];
+                  setContextMenu(null);
+                  handleRemoveSlot(entry);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-rose-600 hover:bg-rose-50/80 transition-colors text-left cursor-pointer font-semibold"
+              >
+                <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">
+                  Remove {contextMenu.entries[0]?.subject_code || 'Slot'}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2365,7 +2493,7 @@ const SESSION_STYLES = {
 };
 
 // Merged Lab Cell — rendered when 2 or 3 consecutive periods share the same lab/block subject.
-function MergedLabCell({ entry, timeRange, span = 2, onDragStart, onRemove }) {
+function MergedLabCell({ entry, timeRange, span = 2, onDragStart }) {
   if (!entry) {
     return (
       <div className="h-14 sm:h-15 border-2 border-dashed border-slate-200 hover:border-slate-300 rounded-xl flex items-center justify-center text-slate-400 text-xs font-medium transition-colors">
@@ -2389,18 +2517,8 @@ function MergedLabCell({ entry, timeRange, span = 2, onDragStart, onRemove }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className={`group relative h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${cardBg}`}
+      className={`h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${cardBg}`}
     >
-      {onRemove && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(e); }}
-          title="Remove block session"
-          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
-        >
-          ✕
-        </button>
-      )}
       <div className="flex items-center justify-between gap-1">
         <span className={`font-bold text-xs ${textCode} truncate tracking-tight`}>{entry.subject_code}</span>
         <div className="flex items-center gap-1 shrink-0">
@@ -2417,7 +2535,7 @@ function MergedLabCell({ entry, timeRange, span = 2, onDragStart, onRemove }) {
 }
 
 // Compact Slot Renderer — shows subject code, faculty, session badge & duration.
-function SlotCell({ entries, onDragStart, onRemove }) {
+function SlotCell({ entries, onDragStart }) {
   const items = Array.isArray(entries) ? entries : (entries ? [entries] : []);
 
   if (items.length === 0) {
@@ -2438,22 +2556,10 @@ function SlotCell({ entries, onDragStart, onRemove }) {
             draggable
             onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
             onClick={(e) => e.stopPropagation()}
-            className="group relative flex items-center justify-between px-1.5 py-0.5 bg-white/90 rounded border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition text-[10px]"
+            className="flex items-center justify-between px-1.5 py-0.5 bg-white/90 rounded border border-purple-100 cursor-grab active:cursor-grabbing active:opacity-60 transition text-[10px]"
           >
             <span className="font-mono font-bold text-purple-900 truncate">{entry.subject_code}</span>
-            <div className="flex items-center gap-1 shrink-0">
-              <span className="text-[8.5px] font-bold text-purple-700 bg-purple-100 px-1 rounded">PAR</span>
-              {onRemove && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(entry, e); }}
-                  title="Remove activity"
-                  className="w-3.5 h-3.5 rounded-full bg-red-100 hover:bg-red-500 text-red-600 hover:text-white flex items-center justify-center text-[8px] font-bold transition-colors cursor-pointer"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+            <span className="text-[8.5px] font-bold text-purple-700 bg-purple-100 px-1 rounded shrink-0">PAR</span>
           </div>
         ))}
       </div>
@@ -2469,18 +2575,8 @@ function SlotCell({ entries, onDragStart, onRemove }) {
       draggable
       onDragStart={(e) => { e.stopPropagation(); onDragStart && onDragStart(e, entry); }}
       onClick={(e) => e.stopPropagation()}
-      className={`group relative h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
+      className={`h-14 sm:h-15 border rounded-xl p-2 flex flex-col justify-between transition shadow-xs hover:shadow cursor-grab active:cursor-grabbing active:opacity-60 select-none ${style.bg} ${style.border} ${style.text}`}
     >
-      {onRemove && (
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); onRemove(entry, e); }}
-          title="Remove slot"
-          className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[10px] font-bold shadow-sm opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
-        >
-          ✕
-        </button>
-      )}
       <div className="flex items-center justify-between gap-1">
         <span className="font-bold text-xs tracking-tight truncate">{entry.subject_code}</span>
         <span className={`text-[9px] font-bold uppercase px-1 py-0.2 rounded shrink-0 ${style.badge}`}>
