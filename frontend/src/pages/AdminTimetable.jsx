@@ -2567,7 +2567,10 @@ function SlotCell({ entries, onDragStart }) {
   }
 
   const entry = items[0];
-  const sessionType = entry.session_type || (entry.is_lab ? 'lab' : 'theory');
+  const sessionType = entry.session_type ||
+    (entry.is_generic_activity ? 'activity' :
+    (entry.is_parallel_activity ? 'activity' :
+    (entry.is_lab ? 'lab' : 'theory')));
   const style = SESSION_STYLES[sessionType] || SESSION_STYLES.theory;
 
   return (
@@ -2580,11 +2583,11 @@ function SlotCell({ entries, onDragStart }) {
       <div className="flex items-center justify-between gap-1">
         <span className="font-bold text-xs tracking-tight truncate">{entry.subject_code}</span>
         <span className={`text-[9px] font-bold uppercase px-1 py-0.2 rounded shrink-0 ${style.badge}`}>
-          {sessionType === 'theory' ? '1h' : (sessionType === 'activity' ? 'ACT' : (sessionType === 'lab' ? 'LAB' : sessionType))}
+          {sessionType === 'activity' ? 'ACT' : (sessionType === 'lab' ? 'LAB' : (sessionType === 'block' ? 'BLK' : '1h'))}
         </span>
       </div>
       <div className="flex items-center justify-between text-[10px] leading-tight">
-        <span className="text-slate-600 truncate font-medium">{entry.faculty_code || entry.faculty_name}</span>
+        <span className="text-slate-600 truncate font-medium">{entry.faculty_code || entry.faculty_name || (entry.is_generic_activity ? 'Activity' : '')}</span>
         {entry.room_number && (
           <span className="text-[9px] text-slate-400 font-mono shrink-0">{entry.room_number}</span>
         )}

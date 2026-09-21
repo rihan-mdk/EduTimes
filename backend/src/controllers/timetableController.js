@@ -88,7 +88,7 @@ async function getTimetable(req, res) {
         ts.end_time
       FROM timetable_entry te
       JOIN subject sub ON te.subject_id = sub.id
-      JOIN faculty f ON sub.faculty_id = f.id
+      LEFT JOIN faculty f ON sub.faculty_id = f.id
       JOIN semester sem ON te.semester_id = sem.id
       LEFT JOIN department d ON sem.department_id = d.id
       JOIN timeslot ts ON te.timeslot_id = ts.id

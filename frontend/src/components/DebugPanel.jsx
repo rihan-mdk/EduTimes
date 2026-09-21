@@ -265,7 +265,6 @@ export default function DebugPanel() {
       {/* Main Debug Panel Drawer */}
       {isOpen && (
         <div
-          data-lenis-prevent
           className={`fixed inset-x-0 bottom-0 z-[99999] flex flex-col bg-slate-950/95 backdrop-blur-xl border-t border-slate-800 text-slate-200 shadow-2xl transition-all duration-200 font-sans select-none ${
             isMaximized ? 'top-0 h-full' : 'h-[460px] max-h-[85vh]'
           }`}
@@ -473,7 +472,6 @@ export default function DebugPanel() {
 
           {/* Log List Content (Scrollable) */}
           <div
-            data-lenis-prevent
             className="flex-1 overflow-y-auto divide-y divide-slate-800/40 font-mono text-xs"
           >
             {filteredLogs.length === 0 ? (
