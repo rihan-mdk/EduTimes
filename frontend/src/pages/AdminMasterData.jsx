@@ -1599,7 +1599,7 @@ export default function AdminMasterData() {
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm disabled:opacity-50 transition-colors"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {editingItem ? 'Save Changes' : 'Create Item'}
+              {editingItem ? 'Save Changes' : 'Update'}
             </button>
           </div>
         </form>
