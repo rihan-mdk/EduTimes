@@ -272,20 +272,74 @@ export default function AdminTimetable() {
     return ROMAN[num] || (num ? `${num}th` : 'III');
   }, [currentSemester]);
 
-  // Derive W.E.F (With Effect From) date from first working day of academic_calendar (DD.MM.YYYY)
+  // Derive W.E.F (With Effect From) date from first working day of academic_calendar (DD-MM-YYYY)
   const wefDate = React.useMemo(() => {
-    if (!calendarDates || calendarDates.length === 0) return '01.09.2026';
+    if (!calendarDates || calendarDates.length === 0) return '20-07-2026';
     const workingDays = [...calendarDates]
       .filter(c => c.type === 'working' && c.date)
       .sort((a, b) => a.date.localeCompare(b.date));
-    if (workingDays.length === 0) return '01.09.2026';
+    if (workingDays.length === 0) return '20-07-2026';
     const firstDate = workingDays[0].date;
     const parts = firstDate.split('-');
     if (parts.length === 3) {
-      return `${parts[2]}.${parts[1]}.${parts[0]}`;
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
     }
     return firstDate;
   }, [calendarDates]);
+
+  // Helper to format a time string (e.g. "09:00:00" or "09:00") to "9:00AM" or "01:50PM"
+  const formatPeriodTime = (timeStr) => {
+    if (!timeStr) return '';
+    const [hStr, mStr] = timeStr.split(':');
+    let h = parseInt(hStr, 10);
+    const m = mStr || '00';
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    if (h > 12) h -= 12;
+    if (h === 0) h = 12;
+    const paddedH = (h < 10 && hStr.startsWith('0')) ? `0${h}` : `${h}`;
+    return `${paddedH}:${m}${ampm}`;
+  };
+
+  // Dynamic header time range lookup per period
+  const getPeriodTimeHeader = (p) => {
+    const ts = (timeslots || []).find(t => t.period_number === p);
+    if (ts && ts.start_time && ts.end_time) {
+      return {
+        start: formatPeriodTime(ts.start_time),
+        end: formatPeriodTime(ts.end_time),
+      };
+    }
+    const defaults = {
+      1: { start: '9:00AM', end: '09:55AM' },
+      2: { start: '9:55AM', end: '10:50AM' },
+      3: { start: '11:10AM', end: '12:05PM' },
+      4: { start: '12:05PM', end: '01:00PM' },
+      5: { start: '01:50PM', end: '02:40PM' },
+      6: { start: '02:40PM', end: '03:30PM' },
+      7: { start: '03:30PM', end: '4:15PM' },
+    };
+    return defaults[p] || { start: '', end: '' };
+  };
+
+  // Complete list of subjects assigned to this semester, sorted by subject_code ascending
+  const semesterSubjectsList = React.useMemo(() => {
+    if (!selectedSemesterId) return [];
+    const semSubMap = new Map();
+    (subjects || []).forEach(s => {
+      if (String(s.semester_id) === String(selectedSemesterId) && s.subject_code) {
+        semSubMap.set(s.subject_code, s);
+      }
+    });
+    (timetableEntries || []).forEach(e => {
+      if (e.subject_code && !semSubMap.has(e.subject_code)) {
+        const matchingSub = (subjects || []).find(s => String(s.id) === String(e.subject_id));
+        semSubMap.set(e.subject_code, matchingSub || e);
+      }
+    });
+    return Array.from(semSubMap.values()).sort((a, b) =>
+      (a.subject_code || '').localeCompare(b.subject_code || '')
+    );
+  }, [subjects, timetableEntries, selectedSemesterId]);
 
   // Fast lookup map for faculty records
   const facultyMap = React.useMemo(() => {
@@ -2152,90 +2206,151 @@ export default function AdminTimetable() {
           top: 0,
           width: '1120px',
           backgroundColor: '#ffffff',
-          color: '#0f172a',
-          fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif",
+          color: '#000000',
+          fontFamily: "'Times New Roman', Times, serif, 'Segoe UI', Arial, sans-serif",
         }}
-        className="p-5 bg-white text-slate-900 border-2 border-slate-900 box-border"
+        className="p-4 bg-white text-black border border-black box-border"
       >
-        {/* 1. Official Centered Header Block */}
-        <div className="text-center border-b-2 border-slate-900 pb-2 mb-2 relative">
-          <div className="absolute left-1 top-0 border-2 border-slate-900 px-3 py-1 font-serif font-black text-sm tracking-wider">
-            YIT
+        {/* HEADER SECTION */}
+        <div className="relative mb-2.5 pt-1">
+          {/* Placeholder logo box on left (blank square region) */}
+          <div className="absolute left-1 top-0 w-[72px] h-[72px] border border-black flex items-center justify-center">
+            {/* Blank square region for logo */}
           </div>
-          {activeDepartment?.code && (
-            <div className="absolute right-1 top-0 border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[9.5px] font-bold uppercase">
-              DEPT: {activeDepartment.code}
-            </div>
-          )}
-          <h1 className="text-[17px] font-black tracking-wide uppercase font-serif text-slate-950 leading-tight">
-            Yenepoya Institute of Technology
-          </h1>
-          <p className="text-[9px] text-slate-600 font-medium tracking-normal">
-            NH-13, Thodar, Moodbidri, Mangalore, Karnataka - 574225
-          </p>
-          <p className="text-[12px] font-extrabold text-slate-900 mt-0.5">
-            Department of {activeDepartment?.name || 'Computer Science and Engineering'}
-          </p>
-          <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-800 mt-0.5">
-            AY {academicYear} • {((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN'} SEMESTER
+
+          {/* Centered Institute Title & Details */}
+          <div className="text-center mx-auto max-w-[920px]">
+            <h1 className="text-[19px] font-bold font-serif uppercase tracking-wider text-black leading-tight">
+              YENEPOYA INSTITUTE OF TECHNOLOGY
+            </h1>
+            <p className="text-[10.5px] text-black font-serif mt-0.5">
+              NH-13, Thodar, Moodbidri - 574225
+            </p>
+            <p className="text-[12.5px] font-bold font-serif text-black mt-0.5">
+              Department of {activeDepartment?.name || 'Artificial Intelligence and Machine Learning'}
+            </p>
+            <p className="text-[13px] font-bold font-serif text-black uppercase mt-0.5">
+              TIME TABLE - {((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN'} SEMESTER (AY {academicYear || currentSemester?.academic_year || '2026-27'})
+            </p>
           </div>
         </div>
 
-        {/* 2. Class-Info Bar */}
-        <div className="border border-slate-800 text-[10px] font-bold uppercase mb-2 text-center py-1 bg-slate-50 flex items-center justify-center divide-x divide-slate-800">
-          <div className="px-5">
-            <span className="text-slate-600 font-semibold mr-1">CLASS:</span>
-            <span className="text-slate-950 font-black">{romanSemester} SEMESTER</span>
-          </div>
-          <div className="px-5">
-            <span className="text-slate-600 font-semibold mr-1">CLASS ROOM:</span>
-            <span className="text-slate-950 font-black">{currentSemester?.class_room || 'LLH-04'}</span>
-          </div>
-          <div className="px-5">
-            <span className="text-slate-600 font-semibold mr-1">W.E.F:</span>
-            <span className="text-slate-950 font-black">{wefDate}</span>
-          </div>
+        {/* CLASS INFO BAR */}
+        <div className="border border-black text-[11px] font-bold font-serif uppercase mb-2 flex items-center justify-between px-4 py-1 bg-white text-black">
+          <div>CLASS: {romanSemester} SEMESTER</div>
+          <div>CLASS ROOM: {currentSemester?.class_room || 'LLH-01'}</div>
+          <div>W.E.F: {wefDate}</div>
         </div>
 
-        {/* 3. Official Timetable Grid */}
-        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2.5 table-fixed">
-          <thead className="bg-slate-100">
-            <tr className="text-slate-900 font-bold text-[9px] uppercase">
-              <th className="border border-slate-800 py-1 px-1 w-[80px]">DAY \ PERIOD</th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 1</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">09:00 - 09:55</div>
+        {/* MAIN TIMETABLE GRID */}
+        <table className="w-full border-collapse border border-black text-center text-xs mb-2 table-fixed">
+          <thead>
+            <tr className="bg-white text-black font-bold font-serif text-[10px]">
+              {/* Day / Time label column */}
+              <th className="border border-black p-1 w-[90px] text-center align-middle font-bold leading-tight">
+                <div>Day &nbsp; Time &rarr;</div>
+                <div className="text-[11px] font-normal leading-none mt-0.5">&darr;</div>
               </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 2</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">09:55 - 10:50</div>
+
+              {/* Period 1 */}
+              {(() => {
+                const t = getPeriodTimeHeader(1);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
+
+              {/* Period 2 */}
+              {(() => {
+                const t = getPeriodTimeHeader(2);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
+
+              {/* TEA BREAK (narrow vertical header) */}
+              <th className="border border-black p-0.5 w-[24px] text-center font-bold leading-tight">
+                <div>T</div>
+                <div>E</div>
+                <div>A</div>
               </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[24px] text-[7.5px] bg-slate-200/80 text-slate-800 font-extrabold">
-                TEA
+
+              {/* Period 3 */}
+              {(() => {
+                const t = getPeriodTimeHeader(3);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
+
+              {/* Period 4 */}
+              {(() => {
+                const t = getPeriodTimeHeader(4);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
+
+              {/* LUNCH BREAK (narrow vertical header) */}
+              <th className="border border-black p-0.5 w-[24px] text-center font-bold leading-tight">
+                <div>L</div>
+                <div>U</div>
+                <div>N</div>
+                <div>C</div>
+                <div>H</div>
               </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 3</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">11:10 - 12:05</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 4</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">12:05 - 13:00</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[24px] text-[7.5px] bg-slate-200/80 text-slate-800 font-extrabold">
-                LUNCH
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 5</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">13:50 - 14:40</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 6</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">14:40 - 15:30</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 7</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">15:30 - 16:15</div>
-              </th>
+
+              {/* Period 5 */}
+              {(() => {
+                const t = getPeriodTimeHeader(5);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
+
+              {/* Period 6 */}
+              {(() => {
+                const t = getPeriodTimeHeader(6);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
+
+              {/* Period 7 */}
+              {(() => {
+                const t = getPeriodTimeHeader(7);
+                return (
+                  <th className="border border-black py-1 px-1 text-center font-bold leading-tight">
+                    <div>{t.start}</div>
+                    <div className="font-normal text-[9px]">To</div>
+                    <div>{t.end}</div>
+                  </th>
+                );
+              })()}
             </tr>
           </thead>
           <tbody>
@@ -2256,46 +2371,21 @@ export default function AdminTimetable() {
               const { mergeMap, skipPeriods } = computeLabMerges(getMergeableSlot);
 
               const renderPrintCell = (items) => {
-                if (!items || items.length === 0) return <span className="text-slate-300 font-mono text-[10px]">—</span>;
+                if (!items || items.length === 0) return null;
                 if (items.length === 1) {
-                  const it = items[0];
-                  const sub = subjects.find(s => String(s.id) === String(it.subject_id));
-                  const fac = resolveFacultyInfo(sub || it);
-                  const isLab = Boolean(it.is_lab || it.session_type === 'lab' || sub?.is_lab);
-                  const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || it.session_type === 'block');
-
                   return (
-                    <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
-                      <span className="font-mono font-bold text-[11px] text-slate-950 tracking-tight">{it.subject_code}</span>
-                      {fac.code && (
-                        <span className="text-[7.5px] font-mono text-slate-600">[{fac.code}]</span>
-                      )}
-                      {isLab ? (
-                        <span className="text-[7px] font-mono font-bold text-slate-700 mt-0.5">[LAB]</span>
-                      ) : isBlock ? (
-                        <span className="text-[7px] font-mono font-bold text-slate-700 mt-0.5">[BLOCK]</span>
-                      ) : it.session_type === 'activity' ? (
-                        <span className="text-[7px] font-mono font-semibold text-slate-600 mt-0.5">[ACT]</span>
-                      ) : null}
-                    </div>
+                    <span className="font-serif font-medium text-[11px] text-black">
+                      {items[0].subject_code}
+                    </span>
                   );
                 }
 
-                // Parallel activities (NSS/PE): stacked slots within the cell, not overlapping, with subject code & faculty code
+                // Parallel activities (NSS/PE): stacked subject codes on two lines
                 return (
-                  <div className="h-full flex flex-col items-center justify-center gap-0.5 py-0.5 leading-tight">
-                    {items.map((it, idx) => {
-                      const sub = subjects.find(s => String(s.id) === String(it.subject_id));
-                      const fac = resolveFacultyInfo(sub || it);
-                      return (
-                        <div key={idx} className={idx > 0 ? "border-t border-slate-300 pt-0.5 w-full text-center" : "w-full text-center"}>
-                          <span className="font-mono font-bold text-[9px] text-slate-950">{it.subject_code}</span>
-                          {fac.code && (
-                            <span className="text-[7.5px] font-mono font-semibold text-slate-600 ml-1">[{fac.code}]</span>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="flex flex-col items-center justify-center font-serif font-medium text-[10px] text-black leading-tight">
+                    {items.map((it, idx) => (
+                      <div key={idx}>{it.subject_code}</div>
+                    ))}
                   </div>
                 );
               };
@@ -2307,38 +2397,34 @@ export default function AdminTimetable() {
 
                 if (mergeInfo) {
                   const entry = items[0];
-                  const sub = subjects.find(s => String(s.id) === String(entry?.subject_id));
-                  const fac = resolveFacultyInfo(sub || entry);
-
                   return (
-                    <td key={p} colSpan={mergeInfo.span} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 text-center align-middle">
-                      <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
-                        <span className="font-mono font-bold text-[11.5px] text-slate-950 tracking-tight">{entry?.subject_code}</span>
-                        {fac.code && (
-                          <span className="text-[8px] font-mono font-semibold text-slate-600">[{fac.code}]</span>
-                        )}
-                        <span className="text-[8px] font-mono font-bold text-slate-800 uppercase tracking-wide mt-0.5">
-                          {mergeInfo.tag}
-                        </span>
-                        <span className="text-[7.5px] font-mono text-slate-500">
-                          {mergeInfo.timeRange}
-                        </span>
-                      </div>
+                    <td
+                      key={p}
+                      colSpan={mergeInfo.span}
+                      className="border border-black p-1 text-center align-middle bg-white"
+                    >
+                      <span className="font-serif font-medium text-[11.5px] text-black tracking-wide">
+                        {entry?.subject_code}
+                      </span>
                     </td>
                   );
                 }
 
                 return (
-                  <td key={p} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 align-middle">
+                  <td
+                    key={p}
+                    className="border border-black p-1 text-center align-middle bg-white"
+                  >
                     {renderPrintCell(items)}
                   </td>
                 );
               };
 
               return (
-                <tr key={day} className="h-9">
-                  <td className="border border-slate-800 bg-slate-100/70 font-bold text-slate-950 text-[10px] uppercase tracking-wider py-0.5 px-1 align-middle">
-                    {day}
+                <tr key={day} className="h-8">
+                  {/* Day column */}
+                  <td className="border border-black bg-white font-bold font-serif text-black text-[10.5px] uppercase tracking-wider py-0.5 px-2 text-center align-middle">
+                    {day.toUpperCase()}
                   </td>
 
                   {/* Period 1 & 2 */}
@@ -2347,17 +2433,16 @@ export default function AdminTimetable() {
 
                   {/* Tea Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-slate-100 text-center py-1 px-0.5 w-[24px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-bold text-[7.5px] tracking-widest text-slate-700 leading-tight">
-                        <span>T</span>
-                        <span>E</span>
-                        <span>A</span>
-                        <span className="my-0.5 text-[5px] text-slate-500">•</span>
-                        <span>B</span>
-                        <span>R</span>
-                        <span>E</span>
-                        <span>A</span>
-                        <span>K</span>
+                    <td
+                      rowSpan={6}
+                      className="border border-black bg-white text-center py-1 px-0.5 w-[24px] align-middle"
+                    >
+                      <div className="flex flex-col items-center justify-center font-serif font-bold text-[9px] text-black leading-loose">
+                        <div>B</div>
+                        <div>R</div>
+                        <div>E</div>
+                        <div>A</div>
+                        <div>K</div>
                       </div>
                     </td>
                   )}
@@ -2368,19 +2453,16 @@ export default function AdminTimetable() {
 
                   {/* Lunch Break: spanning all 6 rows */}
                   {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-slate-100 text-center py-1 px-0.5 w-[24px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-bold text-[7.5px] tracking-widest text-slate-700 leading-tight">
-                        <span>L</span>
-                        <span>U</span>
-                        <span>N</span>
-                        <span>C</span>
-                        <span>H</span>
-                        <span className="my-0.5 text-[5px] text-slate-500">•</span>
-                        <span>B</span>
-                        <span>R</span>
-                        <span>E</span>
-                        <span>A</span>
-                        <span>K</span>
+                    <td
+                      rowSpan={6}
+                      className="border border-black bg-white text-center py-1 px-0.5 w-[24px] align-middle"
+                    >
+                      <div className="flex flex-col items-center justify-center font-serif font-bold text-[9px] text-black leading-loose">
+                        <div>B</div>
+                        <div>R</div>
+                        <div>E</div>
+                        <div>A</div>
+                        <div>K</div>
                       </div>
                     </td>
                   )}
@@ -2395,88 +2477,61 @@ export default function AdminTimetable() {
           </tbody>
         </table>
 
-        {/* 4. Faculty Legend Table (2-Column Format Sorted by Subject Code Ascending) */}
-        {(() => {
-          const seen = new Set();
-          const printLegend = timetableEntries
-            .filter(e => {
-              if (!e.subject_code || seen.has(e.subject_code)) return false;
-              seen.add(e.subject_code);
-              return true;
-            })
-            .sort((a, b) => (a.subject_code || '').localeCompare(b.subject_code || ''));
+        {/* SUBJECT/FACULTY TABLE (Dynamically expands to actual subject count) */}
+        <table className="w-full border-collapse border border-black text-left text-xs table-fixed mb-1">
+          <thead>
+            <tr className="border border-black bg-white text-black font-bold font-serif text-[10.5px]">
+              <th className="border border-black px-2 py-1 w-[18%] text-center">Subject Code</th>
+              <th className="border border-black px-3 py-1 w-[50%] text-center">Subject</th>
+              <th className="border border-black px-3 py-1 w-[32%] text-center">Faculty</th>
+            </tr>
+          </thead>
+          <tbody>
+            {semesterSubjectsList.map((s, idx) => {
+              const facInfo = resolveFacultyInfo(s);
+              return (
+                <tr
+                  key={s.subject_code || idx}
+                  className="border border-black text-[10px] font-serif text-black h-5"
+                >
+                  <td className="border border-black px-2 py-0.5 text-center font-medium">
+                    {s.subject_code}
+                  </td>
+                  <td className="border border-black px-3 py-0.5 font-medium truncate">
+                    {s.name}
+                  </td>
+                  <td className="border border-black px-3 py-0.5 font-medium truncate">
+                    {facInfo.name !== '—' ? facInfo.name : ''}
+                  </td>
+                </tr>
+              );
+            })}
 
-          const advisor = currentSemester?.class_advisor || '—';
-          const mentors = currentSemester?.mentors || '—';
+            {/* Class Advisor & Mentors row */}
+            <tr className="border border-black text-[10.5px] font-serif text-black font-bold">
+              <td colSpan={2} className="border border-black px-3 py-1 text-left">
+                Class Advisor:
+              </td>
+              <td className="border border-black px-3 py-1 text-left">
+                Mentors:
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-          return (
-            <div className="border border-slate-800 mb-2.5 text-xs">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-900 font-bold text-[9px] uppercase border-b border-slate-800">
-                    <th className="border-r border-slate-800 px-3 py-1">Subject Code & Title</th>
-                    <th className="px-3 py-1 w-72">Faculty In-Charge</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {printLegend.map((it, idx) => {
-                    const sub = subjects.find(s => String(s.id) === String(it.subject_id));
-                    const facInfo = resolveFacultyInfo(sub || it);
-                    return (
-                      <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[9.5px]">
-                        <td className="border-r border-slate-800 px-3 py-0.5 text-slate-900">
-                          <span className="font-mono font-bold text-slate-950 mr-2">{it.subject_code}</span>
-                          <span className="text-slate-800 font-medium">{it.subject_name || sub?.name}</span>
-                        </td>
-                        <td className="px-3 py-0.5 text-slate-900 font-medium">
-                          <span>{facInfo.name}</span>
-                          {facInfo.code && (
-                            <span className="font-mono text-[8.5px] text-slate-600 font-normal ml-1.5">[{facInfo.code}]</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Advisor and Mentors footer row */}
-                  <tr className="bg-slate-100/70 border-t border-slate-800 font-semibold text-[9.5px] text-slate-900">
-                    <td className="border-r border-slate-800 px-3 py-1">
-                      <strong className="text-slate-950 font-bold">Class Advisor:</strong>{' '}
-                      <span className="text-slate-800 font-medium">{advisor}</span>
-                    </td>
-                    <td className="px-3 py-1">
-                      <strong className="text-slate-950 font-bold">Mentors:</strong>{' '}
-                      <span className="text-slate-800 font-medium">{mentors}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          );
-        })()}
-
-        {/* 5. Institutional Signatures Footer */}
-        <div className="grid grid-cols-3 text-center text-[10.5px] font-bold pt-1.5">
-          <div>
-            <div className="h-4" />
-            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              Time Table Coordinator
-            </div>
+        {/* FOOTER SECTION: Institutional Signatures */}
+        <div className="grid grid-cols-3 text-center text-[11px] font-serif font-bold text-black mt-7 pt-1">
+          <div className="flex flex-col items-center">
+            <div className="w-[180px] border-t border-black mb-1"></div>
+            <div>Time Table Coordinator</div>
           </div>
-          <div>
-            <div className="h-4" />
-            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              Head of Department
-            </div>
+          <div className="flex flex-col items-center">
+            <div className="w-[180px] border-t border-black mb-1"></div>
+            <div>Head of the Department</div>
           </div>
-          <div>
-            <div className="h-4" />
-            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              <div>Principal</div>
-              <div className="text-[7px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
-                Yenepoya Institute of Technology<br />
-                N.H.13, Thodar, Moodbidri - 574225
-              </div>
-            </div>
+          <div className="flex flex-col items-center">
+            <div className="w-[180px] border-t border-black mb-1"></div>
+            <div>Principal</div>
           </div>
         </div>
       </div>
