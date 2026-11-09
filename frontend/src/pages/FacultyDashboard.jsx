@@ -11,7 +11,8 @@ import {
   CheckCircle2, 
   Coffee, 
   Utensils,
-  UserCheck
+  UserCheck,
+  CalendarOff
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -84,6 +85,7 @@ export default function FacultyDashboard() {
 
   const [timetableEntries, setTimetableEntries] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busySlots, setBusySlots] = useState([]);
 
   // Current real-time clock & day calculation
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -97,8 +99,12 @@ export default function FacultyDashboard() {
     if (!user?.id) return;
     setLoading(true);
     try {
-      const entries = await api.getTimetable({ faculty_id: user.id });
+      const [entries, slots] = await Promise.all([
+        api.getTimetable({ faculty_id: user.id }),
+        api.getFacultyBusySlots({ faculty_id: user.id }).catch(() => []),
+      ]);
       setTimetableEntries(entries);
+      setBusySlots(slots || []);
     } catch (err) {
       addToast(err.message || 'Failed to fetch your schedule', 'error');
     } finally {
@@ -156,6 +162,14 @@ export default function FacultyDashboard() {
   const gridMap = new Map();
   timetableEntries.forEach((entry) => {
     gridMap.set(`${entry.day}_${entry.period_number}`, entry);
+  });
+
+  // Build Busy Slot Map: Key `day_period` -> busy slot (uses timeslot day/period from API)
+  const busySlotMap = new Map();
+  busySlots.forEach((slot) => {
+    if (slot.day && slot.period_number) {
+      busySlotMap.set(`${slot.day}_${slot.period_number}`, slot);
+    }
   });
 
   return (
@@ -317,7 +331,7 @@ export default function FacultyDashboard() {
                   {/* Tea Break */}
                   <th className="py-2 px-0.5 text-center bg-amber-50/60 border-x border-amber-100" scope="col">
                     <div className="flex flex-col items-center justify-center">
-                      <span className="text-[11px]">☕</span>
+                      <Coffee className="w-3 h-3 text-amber-600" />
                       <span className="text-[9.5px] font-bold text-amber-800 uppercase tracking-tighter mt-0.5">Tea</span>
                       <span className="text-[8.5px] font-medium text-amber-600/80">10:50-11:10</span>
                     </div>
@@ -338,7 +352,7 @@ export default function FacultyDashboard() {
                   {/* Lunch Break */}
                   <th className="py-2 px-0.5 text-center bg-orange-50/60 border-x border-orange-100" scope="col">
                     <div className="flex flex-col items-center justify-center">
-                      <span className="text-[11px]">🍽️</span>
+                      <Utensils className="w-3 h-3 text-orange-500" />
                       <span className="text-[9.5px] font-bold text-orange-800 uppercase tracking-tighter mt-0.5">Lunch</span>
                       <span className="text-[8.5px] font-medium text-orange-600/80">13:00-13:50</span>
                     </div>
@@ -378,13 +392,22 @@ export default function FacultyDashboard() {
                   const renderPeriodTd = (p) => {
                     if (skipPeriods.has(p)) return null;
                     const mergeInfo = mergeMap.get(p);
+                    const entry = gridMap.get(`${day}_${p}`);
+                    const busySlot = !entry ? busySlotMap.get(`${day}_${p}`) : null;
                     return (
                       <td key={p} colSpan={mergeInfo ? mergeInfo.span : 1} className="p-1 align-top">
-                        <FacultySlotCell
-                          entry={gridMap.get(`${day}_${p}`)}
-                          span={mergeInfo ? mergeInfo.span : 1}
-                          timeRange={mergeInfo?.timeRange}
-                        />
+                        {busySlot ? (
+                          <BusySlotCell
+                            reason={busySlot.reason}
+                            period={p}
+                          />
+                        ) : (
+                          <FacultySlotCell
+                            entry={entry}
+                            span={mergeInfo ? mergeInfo.span : 1}
+                            timeRange={mergeInfo?.timeRange}
+                          />
+                        )}
                       </td>
                     );
                   };
@@ -436,6 +459,24 @@ export default function FacultyDashboard() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function BusySlotCell({ reason, period }) {
+  const time = period ? `P${period}` : '';
+  return (
+    <div className="h-full min-h-[62px] p-1.5 rounded-lg flex flex-col justify-between text-left border border-slate-300/60 bg-slate-100/80 shadow-xs select-none">
+      <div className="flex items-center gap-1.5">
+        <CalendarOff className="w-3 h-3 text-slate-500 shrink-0" />
+        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tight">External Commitment</span>
+      </div>
+      {reason && (
+        <div className="text-[10px] font-medium text-slate-500 truncate leading-snug mt-0.5" title={reason}>
+          {reason}
+        </div>
+      )}
+      <div className="text-[9px] font-mono text-slate-400 mt-0.5">{time} · Marked Busy</div>
     </div>
   );
 }

@@ -308,5 +308,62 @@ assert.strictEqual(
 assert.strictEqual(nonLabEdgeResult.schedule.length, 2 + prefilledEntries.length);
 console.log('  ✅ Edge-Case Test Passed: Non-lab block subject successfully placed in Period 1-2 as expected.');
 
+// Verify strictly at most 1 lab per day per semester in AIML schedule
+console.log('🧪 Testing Strict 1 Lab Per Day Per Semester Constraint...');
+const semDayLabCounts = new Map();
+const subjectsMap = new Map(aimlSubjects.map(s => [s.id, s]));
+
+for (const entry of aimlResult.schedule) {
+  const sub = subjectsMap.get(entry.subject_id);
+  if (sub && sub.is_lab) {
+    const ts = timeslotsMap.get(entry.timeslot_id);
+    const key = `${entry.semester_id}_${ts.day}`;
+    semDayLabCounts.set(key, (semDayLabCounts.get(key) || 0) + 1);
+  }
+}
+
+for (const [key, count] of semDayLabCounts.entries()) {
+  assert.ok(
+    count <= 2,
+    `Violation: ${key} has ${count} lab hours on the same day! Max allowed is 1 lab (2 hours).`
+  );
+}
+console.log('  ✅ Strict 1 Lab Per Day Passed: No semester has more than 1 lab session on any day.');
+
+// Test Faculty Busy Slots (e.g. 1st year external commitments)
+console.log('🧪 Testing Faculty Busy Slots (1st Year Commitments)...');
+// Faculty 5 (teaches 1BCS305 and 1BCSL306) is assigned external Sem 1 classes on Monday P3 and Tuesday P5
+const mockBusySlots = [
+  { faculty_id: 5, timeslot_id: 3, academic_year: '2026-27', reason: 'Sem 1 C-Programming' }, // Mon P3
+  { faculty_id: 5, timeslot_id: 12, academic_year: '2026-27', reason: 'Sem 1 Workshop' },     // Tue P5
+];
+
+const busyResult = generateTimetable({
+  semesters: aimlSemesters,
+  subjects: aimlSubjects,
+  timeslots: aimlTimeslots,
+  academicYear: '2026-27',
+  facultyBusySlots: mockBusySlots
+});
+
+assert.strictEqual(busyResult.success, true, 'Scheduler failed with faculty busy slots: ' + busyResult.message);
+// Verify Faculty 5 is NEVER scheduled in timeslot 3 or timeslot 12
+for (const entry of busyResult.schedule) {
+  const sub = subjectsMap.get(entry.subject_id);
+  if (sub && sub.faculty_id === 5) {
+    assert.notStrictEqual(
+      entry.timeslot_id,
+      3,
+      'Violation: Faculty 5 scheduled in Timeslot 3 despite external commitment!'
+    );
+    assert.notStrictEqual(
+      entry.timeslot_id,
+      12,
+      'Violation: Faculty 5 scheduled in Timeslot 12 despite external commitment!'
+    );
+  }
+}
+console.log('  ✅ Faculty Busy Slots Test Passed: Faculty 5 completely avoided external commitment timeslots with 0 clashes.');
+
 console.log('\n🎉 All Scheduler Tests Passed!\n');
 

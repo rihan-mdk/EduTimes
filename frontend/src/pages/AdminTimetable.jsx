@@ -22,7 +22,12 @@ import {
   Layers,
   ChevronDown,
   FileText,
-  FileSpreadsheet
+  FileSpreadsheet,
+  UserX,
+  Plus,
+  CalendarOff,
+  ChevronRight,
+  Info
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -153,8 +158,11 @@ export default function AdminTimetable() {
   const [savingSlot, setSavingSlot] = useState(false);
 
   // Drag & Drop state
-  const dragState = useRef(null); // { entryId, subjectId, fromTimeslotId, fromDay, fromPeriod, sessionType }
-  const [dragOverKey, setDragOverKey] = useState(null); // 'Monday_3' — for cell highlight
+  // For block (2h lab/theory) drags, the full block info is stored atomically:
+  // { isBlock, span, entries: [{id, timeslot_id, ...}, ...], subjectId, subjectCode, sessionType, fromDay, fromPeriods: [p, p+1], fromTimeslotIds: [id1, id2] }
+  // For single-slot drags: { isBlock: false, entryId, subjectId, subjectCode, fromTimeslotId, fromDay, fromPeriod, sessionType }
+  const dragState = useRef(null);
+  const [dragOverKeys, setDragOverKeys] = useState(new Set()); // set of 'Day_P' strings highlighted during drag-over
   const [parallelDialog, setParallelDialog] = useState(null); // { drag, targetEntries, targetTimeslotId, targetDay, targetPeriod }
   const [movingSlot, setMovingSlot] = useState(false);
   const [lastAction, setLastAction] = useState(null); // { type, description, data }
@@ -186,6 +194,14 @@ export default function AdminTimetable() {
   const [semesterModalOpen, setSemesterModalOpen] = useState(false);
   const [semesterFormData, setSemesterFormData] = useState({ class_room: '', class_advisor: '', mentors: '' });
   const [savingSemesterInfo, setSavingSemesterInfo] = useState(false);
+
+  // Faculty External Commitments (busy slots) state
+  const [busySlots, setBusySlots] = useState([]);
+  const [busySlotsExpanded, setBusySlotsExpanded] = useState(false);
+  const [busySlotForm, setBusySlotForm] = useState({ faculty_id: '', timeslot_ids: [], reason: '' });
+  const [savingBusySlot, setSavingBusySlot] = useState(false);
+  const [removingBusySlotId, setRemovingBusySlotId] = useState(null);
+  const [busySlotsLoading, setBusySlotsLoading] = useState(false);
 
   // Initial load
   useEffect(() => {
@@ -261,6 +277,69 @@ export default function AdminTimetable() {
   useEffect(() => {
     fetchTimetable();
   }, [selectedSemesterId, academicYear]);
+
+  // Fetch faculty busy slots whenever the academic year or panel opens
+  const fetchBusySlots = async () => {
+    setBusySlotsLoading(true);
+    try {
+      const slots = await api.getFacultyBusySlots({ academic_year: academicYear });
+      setBusySlots(Array.isArray(slots) ? slots : []);
+    } catch (err) {
+      addToast('Failed to load external commitments.', 'error');
+    } finally {
+      setBusySlotsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (busySlotsExpanded) fetchBusySlots();
+  }, [busySlotsExpanded, academicYear]);
+
+  const handleAddBusySlots = async () => {
+    if (!busySlotForm.faculty_id || busySlotForm.timeslot_ids.length === 0) {
+      addToast('Select a faculty member and at least one period.', 'error');
+      return;
+    }
+    setSavingBusySlot(true);
+    try {
+      await api.createFacultyBusySlots({
+        faculty_id: parseInt(busySlotForm.faculty_id, 10),
+        timeslot_ids: busySlotForm.timeslot_ids.map(Number),
+        academic_year: academicYear,
+        reason: busySlotForm.reason.trim() || null,
+      });
+      addToast('External commitment saved successfully.', 'success');
+      setBusySlotForm({ faculty_id: '', timeslot_ids: [], reason: '' });
+      fetchBusySlots();
+    } catch (err) {
+      addToast(err.data?.error || err.message || 'Failed to save commitment.', 'error');
+    } finally {
+      setSavingBusySlot(false);
+    }
+  };
+
+  const handleRemoveBusySlot = async (id) => {
+    setRemovingBusySlotId(id);
+    try {
+      await api.deleteFacultyBusySlot(id);
+      setBusySlots(prev => prev.filter(s => s.id !== id));
+      addToast('Commitment removed.', 'success');
+    } catch (err) {
+      addToast(err.data?.error || err.message || 'Failed to remove commitment.', 'error');
+    } finally {
+      setRemovingBusySlotId(null);
+    }
+  };
+
+  // Toggle a timeslot_id in the busy slot form multi-select
+  const toggleBusyTimeslot = (tsId) => {
+    setBusySlotForm(prev => {
+      const ids = new Set(prev.timeslot_ids);
+      if (ids.has(tsId)) ids.delete(tsId);
+      else ids.add(tsId);
+      return { ...prev, timeslot_ids: Array.from(ids) };
+    });
+  };
 
   const currentSemester = semesters.find(s => String(s.id) === String(selectedSemesterId));
   const semesterSubjects = subjects.filter(s => String(s.semester_id) === String(selectedSemesterId));
@@ -366,62 +445,189 @@ export default function AdminTimetable() {
   };
 
   // ── Drag & Drop Handlers ───────────────────────────────────────
-  const handleDragStart = (e, entry, day, period) => {
-    dragState.current = {
-      entryId: entry.id,
-      subjectId: entry.subject_id,
-      subjectCode: entry.subject_code,
-      fromTimeslotId: entry.timeslot_id,
-      fromDay: day,
-      fromPeriod: period,
-      sessionType: entry.session_type || (entry.is_lab ? 'lab' : 'theory'),
-    };
+  // Segments within a day: break between P2–P3 (tea) and P4–P5 (lunch).
+  // A 2-hour block must stay inside the same segment.
+  const BREAK_BEFORE = new Set([3, 5]); // period numbers that start after a break
+
+  const getBlockDestinationPeriods = (startPeriod, span) => {
+    // Returns [p, p+1, ...] only if all periods in the window are within the same segment.
+    const result = [startPeriod];
+    for (let i = 1; i < span; i++) {
+      const next = startPeriod + i;
+      if (BREAK_BEFORE.has(next)) return null; // would cross a break — invalid
+      if (next > 7) return null;
+      result.push(next);
+    }
+    return result;
+  };
+
+  const handleDragStart = (e, entry, day, period, blockEntries = null, blockSpan = 1) => {
+    if (blockEntries && blockEntries.length > 1) {
+      // Block (multi-hour) drag — drag the entire block atomically
+      dragState.current = {
+        isBlock: true,
+        span: blockSpan,
+        entries: blockEntries,
+        subjectId: blockEntries[0].subject_id,
+        subjectCode: blockEntries[0].subject_code,
+        sessionType: blockEntries[0].session_type || (blockEntries[0].is_lab ? 'lab' : 'theory'),
+        fromDay: day,
+        fromPeriods: blockEntries.map(e => {
+          const ts = timeslots.find(t => t.id === e.timeslot_id);
+          return ts ? ts.period_number : period;
+        }),
+        fromTimeslotIds: blockEntries.map(e => e.timeslot_id),
+      };
+    } else {
+      // Single-slot drag
+      dragState.current = {
+        isBlock: false,
+        entryId: entry.id,
+        subjectId: entry.subject_id,
+        subjectCode: entry.subject_code,
+        fromTimeslotId: entry.timeslot_id,
+        fromDay: day,
+        fromPeriod: period,
+        sessionType: entry.session_type || (entry.is_lab ? 'lab' : 'theory'),
+      };
+    }
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (e, day, period) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverKey(`${day}_${period}`);
+    const drag = dragState.current;
+    if (drag?.isBlock) {
+      const destPeriods = getBlockDestinationPeriods(period, drag.span);
+      if (destPeriods) {
+        setDragOverKeys(new Set(destPeriods.map(p => `${day}_${p}`)));
+      } else {
+        setDragOverKeys(new Set([`${day}_${period}`]));
+      }
+    } else {
+      setDragOverKeys(new Set([`${day}_${period}`]));
+    }
   };
 
   const handleDragLeave = () => {
-    setDragOverKey(null);
+    setDragOverKeys(new Set());
   };
 
   const handleDrop = async (e, day, period) => {
     e.preventDefault();
-    setDragOverKey(null);
+    setDragOverKeys(new Set());
 
     const drag = dragState.current;
     if (!drag) return;
-
-    // Same cell — no-op
-    if (drag.fromDay === day && drag.fromPeriod === period) return;
-
-    const targetTs = timeslots.find(t => t.day === day && t.period_number === period);
-    if (!targetTs) {
-      addToast('No timeslot configured for this cell.', 'error');
-      return;
-    }
-
-    const targetEntries = gridMap.get(`${day}_${period}`) || [];
-
-    if (targetEntries.length === 0) {
-      // Empty cell — move directly
-      await executeDragMove(drag, targetTs.id, day, period);
-    } else {
-      // Occupied — prompt parallel or replace
-      setParallelDialog({
-        drag,
-        targetEntries,
-        targetTimeslotId: targetTs.id,
-        targetDay: day,
-        targetPeriod: period,
-      });
-    }
-
     dragState.current = null;
+
+    if (drag.isBlock) {
+      // ── Block (2h+) atomic drop ──
+      const destPeriods = getBlockDestinationPeriods(period, drag.span);
+      if (!destPeriods) {
+        addToast('Cannot place a lab block across a break period.', 'error');
+        return;
+      }
+
+      // Same position — no-op
+      if (drag.fromDay === day && JSON.stringify(drag.fromPeriods) === JSON.stringify(destPeriods)) return;
+
+      // Resolve destination timeslot IDs
+      const destTimeslots = destPeriods.map(p => timeslots.find(t => t.day === day && t.period_number === p));
+      if (destTimeslots.some(t => !t)) {
+        addToast('No timeslot configured for one or more target periods.', 'error');
+        return;
+      }
+
+      await executeBlockDragMove(drag, day, destPeriods, destTimeslots);
+    } else {
+      // ── Single-slot drop ──
+      if (drag.fromDay === day && drag.fromPeriod === period) return;
+
+      const targetTs = timeslots.find(t => t.day === day && t.period_number === period);
+      if (!targetTs) {
+        addToast('No timeslot configured for this cell.', 'error');
+        return;
+      }
+
+      const targetEntries = gridMap.get(`${day}_${period}`) || [];
+      if (targetEntries.length === 0) {
+        await executeDragMove(drag, targetTs.id, day, period);
+      } else {
+        setParallelDialog({
+          drag,
+          targetEntries,
+          targetTimeslotId: targetTs.id,
+          targetDay: day,
+          targetPeriod: period,
+        });
+      }
+    }
+  };
+
+  const executeBlockDragMove = async (drag, targetDay, destPeriods, destTimeslots) => {
+    setMovingSlot(true);
+    try {
+      const allFromIds = drag.fromTimeslotIds;
+
+      // Validate each destination slot: exclude the dragged entries themselves from clash check
+      for (let i = 0; i < drag.entries.length; i++) {
+        const entry = drag.entries[i];
+        const destTs = destTimeslots[i];
+
+        // Skip if same timeslot — already there
+        if (entry.timeslot_id === destTs.id) continue;
+
+        const checkRes = await api.validateMove({
+          id: entry.id,
+          replace_slot: false,
+          exclude_entry_ids: drag.entries.map(e => e.id),
+          subject_id: drag.subjectId,
+          semester_id: parseInt(selectedSemesterId, 10),
+          timeslot_id: destTs.id,
+          academic_year: academicYear,
+        });
+
+        if (!checkRes.isValid) {
+          addToast(`Cannot move block: ${checkRes.error || 'Clash detected at destination'}`, 'error', 5000);
+          return;
+        }
+      }
+
+      // Move each entry atomically
+      await Promise.all(drag.entries.map((entry, i) =>
+        api.updateTimetableEntry(entry.id, {
+          subject_id: drag.subjectId,
+          semester_id: parseInt(selectedSemesterId, 10),
+          timeslot_id: destTimeslots[i].id,
+          academic_year: academicYear,
+          session_type: drag.sessionType,
+          replace_slot: false,
+        })
+      ));
+
+      setLastAction({
+        type: 'BLOCK_MOVE',
+        description: `Move ${drag.subjectCode} block to ${targetDay} P${destPeriods.join('-')}`,
+        data: {
+          entries: drag.entries.map((e, i) => ({
+            entryId: e.id,
+            subjectId: drag.subjectId,
+            subjectCode: drag.subjectCode,
+            sessionType: drag.sessionType,
+            fromTimeslotId: allFromIds[i],
+          })),
+        },
+      });
+
+      addToast(`Moved ${drag.subjectCode} block to ${targetDay} P${destPeriods.join('–')}`, 'success');
+      fetchTimetable();
+    } catch (err) {
+      addToast(err.data?.error || err.message || 'Block move failed', 'error');
+    } finally {
+      setMovingSlot(false);
+    }
   };
 
   const executeDragMove = async (drag, targetTimeslotId, targetDay, targetPeriod) => {
@@ -623,6 +829,20 @@ export default function AdminTimetable() {
           replace_slot: false,
         });
         addToast(`Undone: Returned ${subjectCode} to its original slot`, 'success');
+      } else if (lastAction.type === 'BLOCK_MOVE') {
+        // Restore each block entry atomically to its original timeslot
+        const { entries } = lastAction.data;
+        await Promise.all(entries.map(e =>
+          api.updateTimetableEntry(e.entryId, {
+            subject_id: e.subjectId,
+            semester_id: parseInt(selectedSemesterId, 10),
+            timeslot_id: e.fromTimeslotId,
+            academic_year: academicYear,
+            session_type: e.sessionType,
+            replace_slot: false,
+          })
+        ));
+        addToast(`Undone: Returned ${entries[0]?.subjectCode} block to its original position`, 'success');
       } else if (lastAction.type === 'REPLACE') {
         const { movedEntry, deletedEntries } = lastAction.data;
 
@@ -1473,7 +1693,7 @@ export default function AdminTimetable() {
                 {/* Tea Break Header */}
                 <th className="py-2 px-0.5 text-center bg-amber-50/60 border-x border-amber-100" scope="col">
                   <div className="flex flex-col items-center justify-center">
-                    <span className="text-[11px]">☕</span>
+                    <Coffee className="w-3 h-3 text-amber-600" />
                     <span className="text-[9.5px] font-bold text-amber-800 uppercase tracking-tighter mt-0.5">Tea</span>
                     <span className="text-[8.5px] font-medium text-amber-600/80">10:50-11:10</span>
                   </div>
@@ -1489,7 +1709,7 @@ export default function AdminTimetable() {
                 {/* Lunch Break Header */}
                 <th className="py-2 px-0.5 text-center bg-orange-50/60 border-x border-orange-100" scope="col">
                   <div className="flex flex-col items-center justify-center">
-                    <span className="text-[11px]">🍽️</span>
+                    <Utensils className="w-3 h-3 text-orange-500" />
                     <span className="text-[9.5px] font-bold text-orange-800 uppercase tracking-tighter mt-0.5">Lunch</span>
                     <span className="text-[8.5px] font-medium text-orange-600/80">13:00-13:50</span>
                   </div>
@@ -1530,7 +1750,7 @@ export default function AdminTimetable() {
                 const renderPeriodTd = (p) => {
                   if (skipPeriods.has(p)) return null;
                   const mergeInfo = mergeMap.get(p);
-                  const isDragOver = dragOverKey === `${day}_${p}`;
+                  const isDragOver = dragOverKeys.has(`${day}_${p}`);
                   return (
                     <td
                       key={p}
@@ -1572,14 +1792,21 @@ export default function AdminTimetable() {
                         isDragOver ? 'bg-orange-100/70 ring-2 ring-orange-400 ring-inset' : 'hover:bg-slate-50/60'
                       }`}
                     >
-                      {mergeInfo ? (
-                        <MergedLabCell
-                          entry={(gridMap.get(`${day}_${p}`) || [])[0]}
-                          timeRange={mergeInfo.timeRange}
-                          span={mergeInfo.span}
-                          onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
-                        />
-                      ) : (
+                      {mergeInfo ? (() => {
+                          // Collect all entries in the merged block window for atomic dragging
+                          const blockEntries = [];
+                          for (let s = 0; s < mergeInfo.span; s++) {
+                            (gridMap.get(`${day}_${p + s}`) || []).forEach(item => blockEntries.push(item));
+                          }
+                          return (
+                            <MergedLabCell
+                              entry={(gridMap.get(`${day}_${p}`) || [])[0]}
+                              timeRange={mergeInfo.timeRange}
+                              span={mergeInfo.span}
+                              onDragStart={(e, entry) => handleDragStart(e, entry, day, p, blockEntries, mergeInfo.span)}
+                            />
+                          );
+                        })() : (
                         <SlotCell
                           entries={gridMap.get(`${day}_${p}`)}
                           onDragStart={(e, entry) => handleDragStart(e, entry, day, p)}
@@ -1679,6 +1906,215 @@ export default function AdminTimetable() {
             </div>
           );
         })()}
+      </section>
+
+      {/* 4. Faculty External Commitments (Busy Slots) */}
+      <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        {/* Collapsible Header */}
+        <button
+          type="button"
+          onClick={() => setBusySlotsExpanded(prev => !prev)}
+          className="w-full flex items-center justify-between px-5 py-4 hover:bg-slate-50/60 transition-colors cursor-pointer select-none"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+              <CalendarOff className="w-4 h-4 text-slate-600" />
+            </div>
+            <div className="text-left">
+              <div className="text-sm font-semibold text-slate-800">Faculty External Commitments</div>
+              <div className="text-xs text-slate-400 mt-0.5">
+                Mark faculty busy periods from other departments (e.g. 1st year classes). These are excluded from scheduling and clash detection.
+              </div>
+            </div>
+            {busySlots.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold flex-shrink-0">
+                {busySlots.length} marked
+              </span>
+            )}
+          </div>
+          <ChevronRight
+            className={`w-4 h-4 text-slate-400 flex-shrink-0 transition-transform duration-200 ${busySlotsExpanded ? 'rotate-90' : ''}`}
+          />
+        </button>
+
+        {busySlotsExpanded && (
+          <div className="border-t border-slate-100 p-5 space-y-6">
+
+            {/* Info note */}
+            <div className="flex items-start gap-3 bg-slate-50 border border-slate-200/80 rounded-xl px-4 py-3">
+              <Info className="w-4 h-4 text-slate-500 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Periods marked here are treated as unavailable for the selected faculty member. The auto-scheduler will automatically avoid these slots, and manual drag-and-drop will warn you if a clash occurs.
+              </p>
+            </div>
+
+            {/* Add Commitment Form */}
+            <div className="space-y-4">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Add Commitment</h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Faculty selector */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Faculty Member</label>
+                  <select
+                    value={busySlotForm.faculty_id}
+                    onChange={e => setBusySlotForm(prev => ({ ...prev, faculty_id: e.target.value }))}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400 transition appearance-none"
+                  >
+                    <option value="">Select faculty...</option>
+                    {facultyList.filter(f => f.role !== 'admin').sort((a, b) => a.name.localeCompare(b.name)).map(f => (
+                      <option key={f.id} value={f.id}>{f.name} ({f.faculty_code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Reason / note */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-600">Reason <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sem 1 — C Programming"
+                    value={busySlotForm.reason}
+                    onChange={e => setBusySlotForm(prev => ({ ...prev, reason: e.target.value }))}
+                    className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Period grid selector */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-slate-600">Busy Periods <span className="text-slate-400 font-normal">— select one or more slots</span></label>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="text-left px-3 py-2 font-semibold text-slate-500 border-b border-r border-slate-200 w-24">Day</th>
+                        {PERIODS.map(p => (
+                          <th key={p} className="px-2 py-2 font-semibold text-slate-500 border-b border-r border-slate-200 text-center last:border-r-0">
+                            P{p}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {DAYS.map((day, di) => (
+                        <tr key={day} className={di % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
+                          <td className="px-3 py-2 font-medium text-slate-600 border-r border-slate-200 text-xs">{day.slice(0, 3)}</td>
+                          {PERIODS.map(p => {
+                            const ts = timeslots.find(t => t.day === day && t.period_number === p);
+                            if (!ts) return <td key={p} className="border-r border-slate-100 last:border-r-0" />;
+                            const selected = busySlotForm.timeslot_ids.includes(ts.id);
+                            return (
+                              <td key={p} className="border-r border-slate-100 last:border-r-0 text-center py-1.5 px-1">
+                                <button
+                                  type="button"
+                                  title={`${day} Period ${p} (${ts.start_time?.slice(0,5)} – ${ts.end_time?.slice(0,5)})`}
+                                  onClick={() => toggleBusyTimeslot(ts.id)}
+                                  className={`w-7 h-7 rounded-md text-[11px] font-semibold transition-colors ${
+                                    selected
+                                      ? 'bg-slate-800 text-white ring-2 ring-slate-800/30'
+                                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                  }`}
+                                >
+                                  {selected ? 'X' : p}
+                                </button>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {busySlotForm.timeslot_ids.length > 0 && (
+                  <p className="text-[11px] text-slate-500 pl-1">{busySlotForm.timeslot_ids.length} period{busySlotForm.timeslot_ids.length > 1 ? 's' : ''} selected</p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddBusySlots}
+                disabled={savingBusySlot || !busySlotForm.faculty_id || busySlotForm.timeslot_ids.length === 0}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition-colors"
+              >
+                {savingBusySlot ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Plus className="w-4 h-4" />
+                )}
+                Save Commitment
+              </button>
+            </div>
+
+            {/* Existing Commitments List */}
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Existing Commitments
+                {busySlots.length > 0 && <span className="ml-2 font-normal text-slate-400">({busySlots.length} total)</span>}
+              </h3>
+
+              {busySlotsLoading ? (
+                <div className="flex items-center gap-2 py-4 text-slate-400">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading...</span>
+                </div>
+              ) : busySlots.length === 0 ? (
+                <div className="py-6 flex flex-col items-center gap-2 text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                  <UserX className="w-8 h-8 text-slate-300" />
+                  <p className="text-sm">No external commitments marked for {academicYear}.</p>
+                </div>
+              ) : (
+                <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100">
+                  {/* Group by faculty for readability */}
+                  {Object.entries(
+                    busySlots.reduce((acc, s) => {
+                      const key = `${s.faculty_id}`;
+                      if (!acc[key]) acc[key] = { faculty_name: s.faculty_name, faculty_code: s.faculty_code, slots: [] };
+                      acc[key].slots.push(s);
+                      return acc;
+                    }, {})
+                  ).map(([facultyId, { faculty_name, faculty_code, slots }]) => (
+                    <div key={facultyId} className="p-3 sm:p-4">
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <span className="text-xs font-semibold text-slate-700">{faculty_name}</span>
+                        <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">{faculty_code}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {slots.map(slot => (
+                          <div
+                            key={slot.id}
+                            className="inline-flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg pl-2.5 pr-1 py-1"
+                          >
+                            <div className="text-[11px] text-slate-700">
+                              <span className="font-semibold">{slot.day?.slice(0, 3)}</span>
+                              <span className="text-slate-400 mx-1">&middot;</span>
+                              <span>P{slot.period_number}</span>
+                              {slot.reason && (
+                                <span className="text-slate-400 ml-1.5">— {slot.reason}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              title="Remove commitment"
+                              disabled={removingBusySlotId === slot.id}
+                              onClick={() => handleRemoveBusySlot(slot.id)}
+                              className="w-5 h-5 flex items-center justify-center rounded-md hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors disabled:opacity-40"
+                            >
+                              {removingBusySlotId === slot.id
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <X className="w-3 h-3" />
+                              }
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Moving slot spinner overlay */}

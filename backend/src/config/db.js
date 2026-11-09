@@ -52,6 +52,7 @@ function initMemoryDb() {
   const migration6 = fs.readFileSync(path.join(__dirname, '../../migrations/006_scope_subject_code_uniqueness.sql'), 'utf8');
   const migration7 = fs.readFileSync(path.join(__dirname, '../../migrations/007_add_semester_advisor_and_mentors.sql'), 'utf8');
   const migration8 = fs.readFileSync(path.join(__dirname, '../../migrations/008_make_faculty_id_nullable_for_generic_activities.sql'), 'utf8');
+  const migration9 = fs.readFileSync(path.join(__dirname, '../../migrations/009_faculty_busy_slots.sql'), 'utf8');
 
   try {
     memDb.public.none(migration1);
@@ -64,7 +65,8 @@ function initMemoryDb() {
     try { memDb.public.none(migration6); } catch (e) { /* constraint already exists */ }
     try { memDb.public.none(migration7); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration8); } catch (e) { /* constraint already altered */ }
-    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-008!');
+    try { memDb.public.none(migration9); } catch (e) { /* table or index already exists */ }
+    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-009!');
   } catch (err) {
     console.warn('Memory DB init note:', err.message);
   }

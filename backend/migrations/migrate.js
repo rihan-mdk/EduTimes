@@ -34,7 +34,8 @@ async function runMigrations() {
       '005_add_department_code.sql',
       '006_scope_subject_code_uniqueness.sql',
       '007_add_semester_advisor_and_mentors.sql',
-      '008_make_faculty_id_nullable_for_generic_activities.sql'
+      '008_make_faculty_id_nullable_for_generic_activities.sql',
+      '009_faculty_busy_slots.sql'
     ];
 
     for (const file of migrationFiles) {

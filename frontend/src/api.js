@@ -199,4 +199,12 @@ export const api = {
 
   // Calendar
   getCalendar: () => apiRequest('/calendar'),
+
+  // Faculty External Commitments (busy slots)
+  getFacultyBusySlots: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/faculty-busy-slots${qs ? `?${qs}` : ''}`);
+  },
+  createFacultyBusySlots: (data) => apiRequest('/faculty-busy-slots', { method: 'POST', body: data }),
+  deleteFacultyBusySlot: (id) => apiRequest(`/faculty-busy-slots/${id}`, { method: 'DELETE' }),
 };

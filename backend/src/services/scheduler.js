@@ -40,10 +40,11 @@ const DAY_ORDER = {
  * @param {Array<Object>} options.timeslots - All available timeslots (day, period_number, id)
  * @param {string} options.academicYear - Academic year string (e.g., '2026-27')
  * @param {Array<Object>} [options.existingEntries] - Optional pre-existing locked entries
+ * @param {Array<Object>} [options.facultyBusySlots] - Optional external faculty busy commitments (e.g. Sem 1 classes)
  * 
  * @returns {Object} { success: boolean, schedule: Array<Object>, message: string, stats: Object }
  */
-function generateTimetable({ semesters, subjects, timeslots, academicYear, existingEntries = [] }) {
+function generateTimetable({ semesters, subjects, timeslots, academicYear, existingEntries = [], facultyBusySlots = [] }) {
   const startTime = Date.now();
 
   // Create lookup maps
@@ -89,10 +90,16 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
 
   subjects.forEach(subj => {
     const weeklyHours = Number(subj.weekly_hours) || 0;
-    const blockHours = Number(subj.block_session_hours) || 0;
-    const blockCount = Number(subj.block_session_count) || 0;
+    let blockHours = Number(subj.block_session_hours) || 0;
+    let blockCount = Number(subj.block_session_count) || 0;
     const isParallel = Boolean(subj.is_parallel_activity);
     const isLab = Boolean(subj.is_lab);
+
+    // Ensure lab sessions strictly default to continuous 2-hour blocks if not configured
+    if (isLab && (blockHours === 0 || blockCount === 0)) {
+      blockHours = Math.min(2, weeklyHours);
+      blockCount = Math.floor(weeklyHours / blockHours);
+    }
 
     let scheduledBlockHours = 0;
     if (blockCount > 0 && blockHours > 0) {
@@ -285,6 +292,16 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
 
   existingEntries.forEach(recordAssignment);
 
+  // Pre-seed facultyOccupied with external commitments / faculty busy slots (e.g. 1st year Sem 1 classes)
+  if (Array.isArray(facultyBusySlots)) {
+    facultyBusySlots.forEach(slot => {
+      if (slot && slot.faculty_id && slot.timeslot_id) {
+        if (!facultyOccupied.has(slot.faculty_id)) facultyOccupied.set(slot.faculty_id, new Set());
+        facultyOccupied.get(slot.faculty_id).add(slot.timeslot_id);
+      }
+    });
+  }
+
   let stepsExplored = 0;
   const MAX_STEPS = 60000; // Search limit
 
@@ -332,11 +349,10 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           continue;
         }
 
-        // Daily lab constraint: allow sessions sized appropriately for the lab's weekly demand
-        const maxLabHoursPerDay = Math.max(3, Math.ceil(weeklyHours / 5));
+        // Daily lab constraint: strictly at most 1 lab session in a day for any semester
         if (demand.is_lab) {
           const labKey = `${demand.semester_id}_${day}`;
-          if ((semesterDayLabs.get(labKey) || 0) >= maxLabHoursPerDay) {
+          if ((semesterDayLabs.get(labKey) || 0) > 0) {
             continue;
           }
         }
@@ -474,11 +490,10 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         continue;
       }
 
-      // Daily lab constraint: allow sessions sized appropriately for the lab's weekly demand
-      const maxLabHoursPerDay = Math.max(3, Math.ceil(weeklyHours / 5));
+      // Daily lab constraint: strictly at most 1 lab session in a day for any semester
       if (demand.is_lab) {
         const labKey = `${demand.semester_id}_${ts.day}`;
-        if ((semesterDayLabs.get(labKey) || 0) >= maxLabHoursPerDay) {
+        if ((semesterDayLabs.get(labKey) || 0) > 0) {
           continue;
         }
       }

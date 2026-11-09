@@ -10,6 +10,7 @@ const subjectRoutes = require('./routes/subjectRoutes');
 const timeslotRoutes = require('./routes/timeslotRoutes');
 const timetableRoutes = require('./routes/timetableRoutes');
 const calendarRoutes = require('./routes/calendarRoutes');
+const busySlotRoutes = require('./routes/busySlotRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -56,6 +57,7 @@ app.use('/api/subjects', subjectRoutes);
 app.use('/api/timeslots', timeslotRoutes);
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/calendar', calendarRoutes);
+app.use('/api/faculty-busy-slots', busySlotRoutes);
 
 // 404 handler
 app.use((req, res) => {

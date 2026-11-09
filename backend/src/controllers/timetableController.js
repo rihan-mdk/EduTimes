@@ -147,6 +147,10 @@ async function validateEntryPlacement(req, res) {
 
     const context = await fetchContextData(academic_year);
 
+    // Load faculty busy slots so manual drag-and-drop also respects external commitments
+    const busySlotsRes = await db.query('SELECT faculty_id, timeslot_id, reason FROM faculty_busy_slot WHERE academic_year = $1', [academic_year]);
+    const facultyBusySlots = busySlotsRes.rows;
+
     // When replace_slot is active, all current occupants will be deleted — exclude them from clash check
     let effectiveExcludeIds = Array.isArray(exclude_entry_ids) ? [...exclude_entry_ids] : [];
     if (replace_slot) {
@@ -163,7 +167,7 @@ async function validateEntryPlacement(req, res) {
       timeslot_id, 
       academic_year 
     };
-    const clashResult = detectClash(candidate, context.existingEntries, context.subjectsMap, context.timeslotsMap, context.semestersMap);
+    const clashResult = detectClash(candidate, context.existingEntries, context.subjectsMap, context.timeslotsMap, context.semestersMap, facultyBusySlots);
 
     res.json(clashResult);
   } catch (err) {
@@ -338,8 +342,8 @@ async function autoGenerateTimetable(req, res) {
 
     semQuery += ' ORDER BY number ASC';
 
-    // Fetch semesters, subjects, timeslots, and existing entries safely via pool
-    const [semestersRes, subjectsRes, timeslotsRes, existingOtherEntriesRes] = await Promise.all([
+    // Fetch semesters, subjects, timeslots, existing entries, and faculty busy slots
+    const [semestersRes, subjectsRes, timeslotsRes, existingOtherEntriesRes, busySlotsRes] = await Promise.all([
       db.query(semQuery, semParams),
       db.query(subQuery, subParams),
       db.query('SELECT * FROM timeslot ORDER BY id ASC'),
@@ -351,13 +355,15 @@ async function autoGenerateTimetable(req, res) {
             LEFT JOIN subject sub ON te.subject_id = sub.id
             WHERE te.academic_year = $1 AND sem.department_id != $2
           `, [academic_year, department_id])
-        : Promise.resolve({ rows: [] })
+        : Promise.resolve({ rows: [] }),
+      db.query('SELECT faculty_id, timeslot_id, reason FROM faculty_busy_slot WHERE academic_year = $1', [academic_year])
     ]);
 
     const semesters = semestersRes.rows;
     const subjects = subjectsRes.rows;
     const timeslots = timeslotsRes.rows;
     const otherDeptEntries = existingOtherEntriesRes.rows || [];
+    const facultyBusySlots = busySlotsRes.rows || [];
 
     if (semesters.length === 0) {
       return res.status(400).json({ error: `No semesters found for academic year ${academic_year}${department_id ? ' in this department' : ''}.` });
@@ -370,13 +376,15 @@ async function autoGenerateTimetable(req, res) {
     }
 
     // Run deterministic backtracking solver across the department's semesters,
-    // respecting existing entries of other departments so shared faculty are not double-booked
+    // respecting existing entries of other departments so shared faculty are not double-booked,
+    // and respecting external faculty busy slots (e.g. 1st year / Basic Science classes)
     const solution = generateTimetable({
       semesters,
       subjects,
       timeslots,
       academicYear: academic_year,
-      existingEntries: otherDeptEntries
+      existingEntries: otherDeptEntries,
+      facultyBusySlots
     });
 
     if (!solution.success) {

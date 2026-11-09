@@ -8,6 +8,7 @@
  * 2. Semester Conflict: No semester can have more than one subject scheduled in the same timeslot.
  *    Exception: Parallel activities (is_parallel_activity=true) where students split into groups (NSS/PE).
  * 3. Academic Year Match: Validates entries belong to the correct academic cycle.
+ * 4. Faculty External Commitments: Checks against external busy slots (e.g. 1st-year classes in another dept).
  */
 
 /**
@@ -26,10 +27,12 @@
  * @param {Array<Object>} existingEntries - List of existing timetable entries in the system
  * @param {Map<number|string, Object>|Array<Object>} subjectsMap - Map or list of subjects keyed by subject id
  * @param {Map<number|string, Object>|Array<Object>} [timeslotsMap] - Map or list of timeslots keyed by timeslot id
+ * @param {Map<number|string, Object>|Array<Object>} [semestersMap] - Map or list of semesters keyed by semester id
+ * @param {Array<Object>} [facultyBusySlots] - Optional external faculty busy slots to check against
  * 
  * @returns {Object} { isValid: boolean, error: string|null, clashType: string|null, conflictingEntry: Object|null }
  */
-function detectClash(candidate, existingEntries, subjectsMap, timeslotsMap = null, semestersMap = null) {
+function detectClash(candidate, existingEntries, subjectsMap, timeslotsMap = null, semestersMap = null, facultyBusySlots = []) {
   if (!candidate) {
     return { isValid: false, error: 'Candidate timetable entry is required.', clashType: 'INVALID_PAYLOAD', conflictingEntry: null };
   }
@@ -163,6 +166,27 @@ function detectClash(candidate, existingEntries, subjectsMap, timeslotsMap = nul
             conflictingEntry: entry
           };
         }
+      }
+    }
+  }
+
+  // Check 2: External Faculty Commitments (busy slots from other departments / 1st year classes)
+  if (Array.isArray(facultyBusySlots) && facultyBusySlots.length > 0 && candidateFacultyId && !candidateIsGeneric) {
+    for (const busy of facultyBusySlots) {
+      if (
+        String(busy.faculty_id) === String(candidateFacultyId) &&
+        String(busy.timeslot_id) === String(timeslot_id)
+      ) {
+        const facultyName = (candidateSubject && candidateSubject.faculty_name) ||
+                           `Faculty ID #${candidateFacultyId}`;
+        const currentSubName = candidateSubject ? candidateSubject.name : `Subject #${subject_id}`;
+        const reasonNote = busy.reason ? ` (${busy.reason})` : '';
+        return {
+          isValid: false,
+          clashType: 'FACULTY_BUSY',
+          error: `${facultyName} is unavailable at this timeslot due to an external commitment${reasonNote}. Cannot schedule "${currentSubName}".`,
+          conflictingEntry: null
+        };
       }
     }
   }
