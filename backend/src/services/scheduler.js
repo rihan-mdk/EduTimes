@@ -214,15 +214,32 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   // Current Schedule state
   const currentSchedule = [...existingEntries];
 
+  // Calculate available days and max department labs allowed per day
+  const availableDays = Array.from(timeslotsByDay.keys());
+  const numDays = availableDays.length || 6;
+  const totalLabDemands = blockDemands.filter(d => d.is_lab).length + singleDemands.filter(d => d.is_lab).length;
+  // If department has <= 6 labs across the week, strictly allow at most 1 lab per day across the department!
+  const maxDeptLabsPerDay = Math.max(1, Math.ceil(totalLabDemands / numDays));
+
+  // Pre-calculate block count per semester to evenly distribute 2-hour blocks across the week
+  const semBlockCounts = new Map();
+  blockDemands.forEach(d => {
+    semBlockCounts.set(d.semester_id, (semBlockCounts.get(d.semester_id) || 0) + 1);
+  });
+
   // Tracking state structures:
   // facultyOccupied: Map<faculty_id, Set<timeslot_id>>
   // semesterOccupied: Map<semester_id, Map<timeslot_id, Array<subject_id>>>
   // subjectDayHours: Map<"semId_subId_day", count>
   // semesterDayLabs: Map<"semId_day", count> (tracks lab hours scheduled per semester per day)
+  // departmentDayLabs: Map<"day", count> (tracks total lab hours scheduled across the entire department per day)
+  // semesterDayBlocks: Map<"semId_day", count> (tracks total multi-hour blocks per semester per day)
   const facultyOccupied = new Map();
   const semesterOccupied = new Map();
   const subjectDayHours = new Map();
   const semesterDayLabs = new Map();
+  const departmentDayLabs = new Map();
+  const semesterDayBlocks = new Map();
 
   function recordAssignment(entry) {
     const sub = subjectsMap.get(entry.subject_id);
@@ -246,6 +263,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       if (sub && sub.is_lab) {
         const labKey = `${entry.semester_id}_${ts.day}`;
         semesterDayLabs.set(labKey, (semesterDayLabs.get(labKey) || 0) + 1);
+        departmentDayLabs.set(ts.day, (departmentDayLabs.get(ts.day) || 0) + 1);
       }
     }
   }
@@ -285,6 +303,13 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           semesterDayLabs.delete(labKey);
         } else {
           semesterDayLabs.set(labKey, labCount - 1);
+        }
+
+        const deptLabCount = departmentDayLabs.get(ts.day) || 0;
+        if (deptLabCount <= 1) {
+          departmentDayLabs.delete(ts.day);
+        } else {
+          departmentDayLabs.set(ts.day, deptLabCount - 1);
         }
       }
     }
@@ -329,10 +354,21 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       const length = demand.block_hours;
       const candidateWindows = (demand.is_lab ? labBlockWindowsByLength : blockWindowsByLength).get(length) || [];
 
-      // Sort candidate windows dynamically: prefer days with fewer hours for this subject
+      // Sort candidate windows dynamically: prefer days with fewer department labs, fewer semester blocks, and fewer hours
       const sortedWindows = [...candidateWindows].sort((winA, winB) => {
         const dayA = winA[0].day;
         const dayB = winB[0].day;
+
+        if (demand.is_lab) {
+          const deptLabsA = departmentDayLabs.get(dayA) || 0;
+          const deptLabsB = departmentDayLabs.get(dayB) || 0;
+          if (deptLabsA !== deptLabsB) return deptLabsA - deptLabsB;
+        }
+
+        const blocksA = semesterDayBlocks.get(`${demand.semester_id}_${dayA}`) || 0;
+        const blocksB = semesterDayBlocks.get(`${demand.semester_id}_${dayB}`) || 0;
+        if (blocksA !== blocksB) return blocksA - blocksB;
+
         const countA = subjectDayHours.get(`${demand.semester_id}_${demand.subject_id}_${dayA}`) || 0;
         const countB = subjectDayHours.get(`${demand.semester_id}_${demand.subject_id}_${dayB}`) || 0;
         return countA - countB;
@@ -355,6 +391,20 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           if ((semesterDayLabs.get(labKey) || 0) > 0) {
             continue;
           }
+
+          // Department-wide lab constraint: strictly at most 1 lab per day across the whole department
+          const currentDeptLabs = departmentDayLabs.get(day) || 0;
+          if (currentDeptLabs >= maxDeptLabsPerDay) {
+            continue;
+          }
+        }
+
+        // Limit block sessions per semester per day (evenly distributes multi-hour blocks across days)
+        const semTotalBlocks = semBlockCounts.get(demand.semester_id) || 1;
+        const maxBlocksForThisSem = Math.max(1, Math.ceil(semTotalBlocks / numDays));
+        const semBlockKey = `${demand.semester_id}_${day}`;
+        if ((semesterDayBlocks.get(semBlockKey) || 0) >= maxBlocksForThisSem) {
+          continue;
         }
 
         // Validate all slots in consecutive window
@@ -420,6 +470,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         }
 
         // Forward step: Place the entire block atomically
+        semesterDayBlocks.set(semBlockKey, (semesterDayBlocks.get(semBlockKey) || 0) + 1);
         for (const entry of entriesToPlace) {
           currentSchedule.push(entry);
           recordAssignment(entry);
@@ -431,6 +482,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         }
 
         // Backtrack step: Remove the entire block atomically
+        semesterDayBlocks.set(semBlockKey, Math.max(0, (semesterDayBlocks.get(semBlockKey) || 1) - 1));
         for (let k = 0; k < entriesToPlace.length; k++) {
           const removed = currentSchedule.pop();
           removeAssignment(removed);
@@ -445,6 +497,11 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     // -------------------------------------------------------------
     // Sort candidate timeslots dynamically: prefer days with fewer classes of this subject
     const candidateTimeslots = [...sortedTimeslots].sort((tsA, tsB) => {
+      if (demand.is_lab) {
+        const deptLabsA = departmentDayLabs.get(tsA.day) || 0;
+        const deptLabsB = departmentDayLabs.get(tsB.day) || 0;
+        if (deptLabsA !== deptLabsB) return deptLabsA - deptLabsB;
+      }
       const countA = subjectDayHours.get(`${demand.semester_id}_${demand.subject_id}_${tsA.day}`) || 0;
       const countB = subjectDayHours.get(`${demand.semester_id}_${demand.subject_id}_${tsB.day}`) || 0;
       return countA - countB;
@@ -494,6 +551,11 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       if (demand.is_lab) {
         const labKey = `${demand.semester_id}_${ts.day}`;
         if ((semesterDayLabs.get(labKey) || 0) > 0) {
+          continue;
+        }
+
+        const deptLabs = departmentDayLabs.get(ts.day) || 0;
+        if (deptLabs >= maxDeptLabsPerDay) {
           continue;
         }
       }
