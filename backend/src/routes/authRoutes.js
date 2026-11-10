@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/authMiddleware');
+const { authLimiter } = require('../middleware/rateLimiters');
 
-router.post('/login', authController.login);
-router.post('/check-department', authController.checkDepartment);
-router.post('/setup-department', authController.setupDepartment);
+router.post('/login', authLimiter, authController.login);
+router.post('/check-department', authLimiter, authController.checkDepartment);
+router.post('/setup-department', authLimiter, authController.setupDepartment);
 router.get('/me', authenticateToken, authController.getMe);
 router.put('/profile', authenticateToken, authController.updateProfile);
 

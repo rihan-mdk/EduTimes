@@ -110,6 +110,9 @@ class DebugLogger {
    */
   init() {
     if (this.initialized || typeof window === 'undefined') return;
+    const isDebugAllowed = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true';
+    if (!isDebugAllowed) return;
+
     this.initialized = true;
 
     try {

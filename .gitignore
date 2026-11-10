@@ -8,12 +8,16 @@ dist/
 frontend/dist/
 build/
 
-# Environment variables
+# Environment variables & secrets
 .env
-backend/.env
-frontend/.env
-.env.local
+.env.*
+!.env.example
 *.local
+*.pem
+*.key
+*.cert
+*.pfx
+credentials.json
 
 # Logs
 *.log

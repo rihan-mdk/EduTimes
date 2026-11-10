@@ -179,8 +179,18 @@ async function validateEntryPlacement(req, res) {
 async function createTimetableEntry(req, res) {
   try {
     const { subject_id, semester_id, timeslot_id, academic_year, replace_slot, session_type } = req.body;
+    const userDeptId = req.user?.department_id;
+
     if (!subject_id || !semester_id || !timeslot_id || !academic_year) {
       return res.status(400).json({ error: 'subject_id, semester_id, timeslot_id, and academic_year are required.' });
+    }
+
+    // Tenant check: verify semester belongs to user's department
+    if (userDeptId) {
+      const semCheck = await db.query('SELECT department_id FROM semester WHERE id = $1', [semester_id]);
+      if (semCheck.rows.length === 0 || String(semCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot create timetable entry for another department.' });
+      }
     }
 
     const context = await fetchContextData(academic_year);
@@ -240,8 +250,28 @@ async function updateTimetableEntry(req, res) {
   try {
     const { id } = req.params;
     const { subject_id, semester_id, timeslot_id, academic_year, replace_slot, session_type } = req.body;
+    const userDeptId = req.user?.department_id;
+
     if (!subject_id || !semester_id || !timeslot_id || !academic_year) {
       return res.status(400).json({ error: 'subject_id, semester_id, timeslot_id, and academic_year are required.' });
+    }
+
+    // Tenant check: verify existing entry and target semester belong to user's department
+    if (userDeptId) {
+      const entryCheck = await db.query(`
+        SELECT te.id, sem.department_id 
+        FROM timetable_entry te
+        JOIN semester sem ON te.semester_id = sem.id
+        WHERE te.id = $1
+      `, [id]);
+      if (entryCheck.rows.length === 0 || String(entryCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot edit entry of another department.' });
+      }
+
+      const targetSem = await db.query('SELECT department_id FROM semester WHERE id = $1', [semester_id]);
+      if (targetSem.rows.length === 0 || String(targetSem.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Target semester belongs to another department.' });
+      }
     }
 
     const context = await fetchContextData(academic_year);
@@ -306,6 +336,20 @@ async function updateTimetableEntry(req, res) {
 async function deleteTimetableEntry(req, res) {
   try {
     const { id } = req.params;
+    const userDeptId = req.user?.department_id;
+
+    if (userDeptId) {
+      const entryCheck = await db.query(`
+        SELECT te.id, sem.department_id 
+        FROM timetable_entry te
+        JOIN semester sem ON te.semester_id = sem.id
+        WHERE te.id = $1
+      `, [id]);
+      if (entryCheck.rows.length === 0 || String(entryCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot delete entry of another department.' });
+      }
+    }
+
     const result = await db.query('DELETE FROM timetable_entry WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Timetable entry not found.' });
     res.json({ message: 'Timetable entry deleted successfully', deleted: result.rows[0] });
@@ -317,7 +361,13 @@ async function deleteTimetableEntry(req, res) {
 // 6. Auto-generate Timetable for Semesters (Backtracking Algorithm)
 async function autoGenerateTimetable(req, res) {
   try {
-    const { academic_year, overwrite = true, department_id } = req.body;
+    const userDeptId = req.user?.department_id;
+    const { academic_year, overwrite = true } = req.body;
+    const department_id = userDeptId || req.body.department_id;
+
+    if (!academic_year) {
+      return res.status(400).json({ error: 'academic_year is required (e.g. "2025-2026").' });
+    }
     if (!academic_year) {
       return res.status(400).json({ error: 'academic_year is required (e.g. "2025-2026").' });
     }
@@ -455,20 +505,38 @@ async function autoGenerateTimetable(req, res) {
 async function clearTimetable(req, res) {
   try {
     const { semester_id, academic_year } = req.body;
+    const userDeptId = req.user?.department_id;
+
     if (!academic_year) {
       return res.status(400).json({ error: 'academic_year is required.' });
     }
 
-    let query = 'DELETE FROM timetable_entry WHERE academic_year = $1';
-    const params = [academic_year];
-
     if (semester_id) {
-      params.push(semester_id);
-      query += ' AND semester_id = $2';
+      if (userDeptId) {
+        const semCheck = await db.query('SELECT department_id FROM semester WHERE id = $1', [semester_id]);
+        if (semCheck.rows.length === 0 || String(semCheck.rows[0].department_id) !== String(userDeptId)) {
+          return res.status(403).json({ error: 'Access denied: Cannot clear timetable for another department semester.' });
+        }
+      }
+      const result = await db.query(
+        'DELETE FROM timetable_entry WHERE academic_year = $1 AND semester_id = $2',
+        [academic_year, semester_id]
+      );
+      return res.json({ message: `Cleared ${result.rowCount} timetable entries.` });
     }
 
-    const result = await db.query(query, params);
-    res.json({ message: `Cleared ${result.rowCount} timetable entries.` });
+    // When no specific semester is provided, scope strictly to user's department
+    if (userDeptId) {
+      const result = await db.query(`
+        DELETE FROM timetable_entry 
+        WHERE academic_year = $1 AND semester_id IN (
+          SELECT id FROM semester WHERE department_id = $2
+        )
+      `, [academic_year, userDeptId]);
+      return res.json({ message: `Cleared ${result.rowCount} timetable entries for department.` });
+    }
+
+    return res.status(400).json({ error: 'semester_id or department context is required to clear timetable.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

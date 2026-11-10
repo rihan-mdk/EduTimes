@@ -1,9 +1,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'yensync_super_secret_jwt_key_2026_department';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const { JWT_SECRET, JWT_EXPIRES_IN } = require('../config/jwt');
+const { sanitizeText, sanitizeCode, validatePassword } = require('../utils/sanitize');
 
 // ---------------------------------------------------------------
 // POST /api/auth/check-department
@@ -49,8 +48,19 @@ async function setupDepartment(req, res) {
       });
     }
 
-    const trimmedCode = department_code.trim().toUpperCase();
-    const trimmedFacultyCode = faculty_code.trim();
+    const pwdValidation = validatePassword(password);
+    if (!pwdValidation.valid) {
+      return res.status(400).json({ error: pwdValidation.error });
+    }
+
+    const trimmedDeptName = sanitizeText(department_name, 100);
+    const trimmedCode = sanitizeCode(department_code, 20);
+    const trimmedFacultyCode = sanitizeCode(faculty_code, 20);
+    const trimmedAdminName = sanitizeText(admin_name, 100);
+
+    if (!trimmedDeptName || !trimmedCode || !trimmedFacultyCode || !trimmedAdminName) {
+      return res.status(400).json({ error: 'Invalid characters in department or admin details.' });
+    }
 
     // Check dept code not already taken
     const deptCheck = await db.query(
@@ -228,8 +238,9 @@ async function updateProfile(req, res) {
       if (!current_password) {
         return res.status(400).json({ error: 'Current password is required to set a new password.' });
       }
-      if (new_password.length < 4) {
-        return res.status(400).json({ error: 'New password must be at least 4 characters long.' });
+      const pwdValidation = validatePassword(new_password);
+      if (!pwdValidation.valid) {
+        return res.status(400).json({ error: pwdValidation.error });
       }
       const isMatch = await bcrypt.compare(current_password, currentUser.password_hash);
       if (!isMatch) {
@@ -242,7 +253,10 @@ async function updateProfile(req, res) {
     // 3. If faculty_code is being changed, check uniqueness
     let updatedFacultyCode = currentUser.faculty_code;
     if (faculty_code && faculty_code.trim()) {
-      const trimmedCode = faculty_code.trim();
+      const trimmedCode = sanitizeCode(faculty_code, 20);
+      if (!trimmedCode) {
+        return res.status(400).json({ error: 'Invalid faculty code format.' });
+      }
       if (trimmedCode.toLowerCase() !== currentUser.faculty_code.toLowerCase()) {
         const codeCheck = await db.query(
           `SELECT id FROM faculty WHERE LOWER(faculty_code) = LOWER($1) AND id != $2`,
@@ -256,7 +270,7 @@ async function updateProfile(req, res) {
     }
 
     // 4. If name changed
-    const updatedName = name && name.trim() ? name.trim() : currentUser.name;
+    const updatedName = name && name.trim() ? sanitizeText(name, 100) : currentUser.name;
 
     // 5. Update database record
     await db.query(

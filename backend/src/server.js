@@ -1,9 +1,11 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 require('dotenv').config();
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+const { globalLimiter } = require('./middleware/rateLimiters');
 const authRoutes = require('./routes/authRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
 const facultyRoutes = require('./routes/facultyRoutes');
@@ -17,35 +19,56 @@ const busySlotRoutes = require('./routes/busySlotRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ─── Security Headers (Helmet) ────────────────────────────────────────────────
+// Hides X-Powered-By, sets X-Content-Type-Options, X-Frame-Options, HSTS, etc.
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.disable('x-powered-by');
+
 // ─── CORS Configuration ────────────────────────────────────────────────────────
-// NOTE: This must be the VERY FIRST middleware registered.
-// When the server crashes/restarts on Render, the browser sends an OPTIONS
-// preflight before the real request. If CORS isn't handled immediately, the
-// browser gets no Access-Control-Allow-Origin header and shows a "CORS error"
-// even though the real problem is a server timeout / cold start.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(s => s.trim())
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://localhost:5000'];
+
 const corsOptions = {
-  origin: '*',
+  origin: function (origin, callback) {
+    // Allow non-browser requests (e.g. mobile, curl, server-to-server) or when not in production
+    if (!origin || process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    return callback(new Error('Blocked by CORS policy: Origin not allowed'));
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204,  // Some browsers (IE11) choke on 200 for OPTIONS
+  credentials: true,
+  optionsSuccessStatus: 204
 };
 
-// Handle ALL preflight OPTIONS requests immediately — before any other middleware.
-// This guarantees CORS headers are sent even if a later middleware is slow/throws.
 app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 
-app.use(express.json());
+// ─── Body Parsers with Strict Size Limits ──────────────────────────────────────
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
+// Protects general API endpoints against flooding and DoS
+app.use('/api/', globalLimiter);
 
 // Request logging in development
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
-  next();
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    next();
+  });
+}
 
 // ─── Health check ─────────────────────────────────────────────────────────────
-// Render pings this every 30s. Must respond fast — no DB call here.
+// Render / Cloud pings this every 30s. Must respond fast — no DB call here.
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', app: 'EduTimes Backend API', timestamp: new Date().toISOString() });
 });
@@ -69,8 +92,9 @@ app.use((req, res) => {
 // Global error handler — always sends CORS-safe JSON so the client gets a
 // readable error instead of a network-level CORS failure
 app.use((err, req, res, next) => {
-  console.error('Unhandled server error:', err);
-  res.status(500).json({ error: 'An unexpected server error occurred.' });
+  console.error('Unhandled server error:', err.message || err);
+  const status = err.message && err.message.includes('CORS') ? 403 : 500;
+  res.status(status).json({ error: err.message || 'An unexpected server error occurred.' });
 });
 
 if (process.env.NODE_ENV !== 'test') {

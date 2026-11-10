@@ -1,8 +1,9 @@
 const db = require('../config/db');
+const { sanitizeText } = require('../utils/sanitize');
 
 async function getAllSemesters(req, res) {
   try {
-    const { department_id } = req.query;
+    const department_id = req.query.department_id;
     let query = `
       SELECT s.*, d.name as department_name, d.code as department_code
       FROM semester s
@@ -41,23 +42,24 @@ async function getSemesterById(req, res) {
 
 async function createSemester(req, res) {
   try {
-    const { number, department_id, class_room, academic_year, class_advisor, mentors } = req.body;
+    const { number, class_room, academic_year, class_advisor, mentors } = req.body;
+    // Derive department_id strictly from authenticated user if available
+    const department_id = req.user?.department_id || req.body.department_id;
+    
     if (!number || !department_id || !class_room || !academic_year) {
       return res.status(400).json({ error: 'number, department_id, class_room, and academic_year are required' });
     }
 
     const semNum = parseInt(number, 10);
     const deptId = parseInt(department_id, 10);
-    const year = academic_year.trim();
-    const room = class_room.trim();
-    const advisor = class_advisor ? class_advisor.trim() : null;
-    const mentorsList = mentors ? mentors.trim() : null;
+    const year = sanitizeText(academic_year, 20);
+    const room = sanitizeText(class_room, 50);
+    const advisor = class_advisor ? sanitizeText(class_advisor, 100) : null;
+    const mentorsList = mentors ? sanitizeText(mentors, 255) : null;
 
     // Step 1: Pre-validate duplicate semester number in the same department & academic year
     console.log(`\n🔍 [Semester Validation] Checking semester #${semNum} for Department #${deptId} (${year})`);
     const checkSql = 'SELECT id, number FROM semester WHERE number = $1 AND department_id = $2 AND academic_year = $3';
-    console.log(`   SQL: ${checkSql} | Params: [ ${semNum}, ${deptId}, "${year}" ]`);
-
     const existing = await db.query(checkSql, [semNum, deptId, year]);
     if (existing.rows.length > 0) {
       console.warn(`⚠️ [Semester Validation] Duplicate found: Semester ${semNum} already configured for this department & academic year (ID=${existing.rows[0].id})`);
@@ -66,26 +68,17 @@ async function createSemester(req, res) {
         field: 'number'
       });
     }
-    console.log(`✅ [Semester Validation] Semester #${semNum} is available.`);
 
     const insertSql = `
       INSERT INTO semester (number, department_id, class_room, academic_year, class_advisor, mentors)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
-    console.log(`📝 [Semester Insert] Executing insert for Semester ${semNum} (Room: ${room})`);
-
     const result = await db.query(insertSql, [semNum, deptId, room, year, advisor, mentorsList]);
     console.log(`🎉 [Semester Insert] Successfully created semester ID=${result.rows[0].id}`);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('❌ [Semester Insert Error]:', {
-      message: err.message,
-      code: err.code,
-      detail: err.detail,
-      constraint: err.constraint
-    });
-
+    console.error('❌ [Semester Insert Error]:', err);
     if (err.code === '23505') {
       return res.status(400).json({ error: 'Semester already exists.' });
     }
@@ -95,15 +88,27 @@ async function createSemester(req, res) {
 
 async function updateSemester(req, res) {
   try {
-    const { number, department_id, class_room, academic_year, class_advisor, mentors } = req.body;
+    const { number, class_room, academic_year, class_advisor, mentors } = req.body;
     const { id } = req.params;
+    const userDeptId = req.user?.department_id;
+
+    // Check target semester existence and tenant ownership
+    const targetCheck = await db.query('SELECT id, department_id FROM semester WHERE id = $1', [id]);
+    if (targetCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Semester not found' });
+    }
+    const target = targetCheck.rows[0];
+
+    if (userDeptId && String(target.department_id) !== String(userDeptId)) {
+      return res.status(403).json({ error: 'Access denied: Cannot modify semester in another department' });
+    }
 
     const semNum = parseInt(number, 10);
-    const deptId = parseInt(department_id, 10);
-    const year = academic_year.trim();
-    const room = class_room.trim();
-    const advisor = class_advisor !== undefined ? (class_advisor ? class_advisor.trim() : null) : null;
-    const mentorsList = mentors !== undefined ? (mentors ? mentors.trim() : null) : null;
+    const deptId = userDeptId || parseInt(req.body.department_id || target.department_id, 10);
+    const year = sanitizeText(academic_year, 20);
+    const room = sanitizeText(class_room, 50);
+    const advisor = class_advisor !== undefined ? (class_advisor ? sanitizeText(class_advisor, 100) : null) : null;
+    const mentorsList = mentors !== undefined ? (mentors ? sanitizeText(mentors, 255) : null) : null;
 
     console.log(`\n🔍 [Semester Update Validation] Checking semester #${semNum} for ID != ${id}`);
     const checkSql = 'SELECT id FROM semester WHERE number = $1 AND department_id = $2 AND academic_year = $3 AND id != $4';
@@ -134,7 +139,20 @@ async function updateSemester(req, res) {
 
 async function deleteSemester(req, res) {
   try {
-    const result = await db.query('DELETE FROM semester WHERE id = $1 RETURNING *', [req.params.id]);
+    const { id } = req.params;
+    const userDeptId = req.user?.department_id;
+
+    if (userDeptId) {
+      const targetCheck = await db.query('SELECT id, department_id FROM semester WHERE id = $1', [id]);
+      if (targetCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Semester not found' });
+      }
+      if (String(targetCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot delete semester in another department' });
+      }
+    }
+
+    const result = await db.query('DELETE FROM semester WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Semester not found' });
     console.log(`🗑️ [Semester Delete] Deleted semester ID=${result.rows[0].id} (S${result.rows[0].number})`);
     res.json({ message: 'Semester deleted successfully', deleted: result.rows[0] });

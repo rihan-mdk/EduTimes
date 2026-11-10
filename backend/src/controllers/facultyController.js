@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const db = require('../config/db');
+const { sanitizeText, sanitizeCode, validatePassword } = require('../utils/sanitize');
 
 async function getAllFaculty(req, res) {
   try {
@@ -42,12 +43,23 @@ async function getFacultyById(req, res) {
 
 async function createFaculty(req, res) {
   try {
-    const { faculty_code, name, password, role = 'faculty', department_id } = req.body;
+    const { faculty_code, name, password, role = 'faculty' } = req.body;
+    const department_id = req.user?.department_id || req.body.department_id;
     if (!faculty_code || !name || !password || !department_id) {
       return res.status(400).json({ error: 'faculty_code, name, password, and department_id are required' });
     }
 
-    const trimmedCode = faculty_code.trim();
+    const pwdCheck = validatePassword(password);
+    if (!pwdCheck.valid) {
+      return res.status(400).json({ error: pwdCheck.error });
+    }
+
+    const trimmedCode = sanitizeCode(faculty_code, 20);
+    const sanitizedName = sanitizeText(name, 100);
+
+    if (!trimmedCode || !sanitizedName) {
+      return res.status(400).json({ error: 'Valid faculty code and name are required.' });
+    }
 
     // Step 1: Check for duplicate faculty_code — join department for context
     console.log(`\n🔍 [Faculty Validation] Checking uniqueness for faculty_code: "${trimmedCode}"`);
@@ -97,9 +109,9 @@ async function createFaculty(req, res) {
       VALUES ($1, $2, $3, $4, $5)
       RETURNING id, faculty_code, name, role, department_id
     `;
-    console.log(`📝 [Faculty Insert] Executing insert for "${name.trim()}" (${trimmedCode})`);
+    console.log(`📝 [Faculty Insert] Executing insert for "${sanitizedName}" (${trimmedCode})`);
     
-    const result = await db.query(insertSql, [trimmedCode, name.trim(), password_hash, role, department_id]);
+    const result = await db.query(insertSql, [trimmedCode, sanitizedName, password_hash, role, department_id]);
 
     console.log(`🎉 [Faculty Insert] Successfully created faculty ID=${result.rows[0].id}`);
     res.status(201).json(result.rows[0]);
@@ -123,9 +135,28 @@ async function createFaculty(req, res) {
 
 async function updateFaculty(req, res) {
   try {
-    const { faculty_code, name, password, role, department_id } = req.body;
+    const { faculty_code, name, password, role } = req.body;
     const { id } = req.params;
-    const trimmedCode = faculty_code.trim();
+    const userDeptId = req.user?.department_id;
+
+    // Check target faculty existence and tenant ownership
+    const targetCheck = await db.query('SELECT id, department_id, name FROM faculty WHERE id = $1', [id]);
+    if (targetCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Faculty not found' });
+    }
+    const target = targetCheck.rows[0];
+
+    // Enforce tenant isolation: admins can only modify faculty in their own department
+    if (userDeptId && String(target.department_id) !== String(userDeptId)) {
+      return res.status(403).json({ error: 'Access denied: Cannot modify faculty in another department' });
+    }
+
+    const trimmedCode = sanitizeCode(faculty_code, 20);
+    const sanitizedName = sanitizeText(name, 100);
+
+    if (!trimmedCode || !sanitizedName) {
+      return res.status(400).json({ error: 'Valid faculty code and name are required.' });
+    }
 
     // Check if code is taken by another faculty member
     console.log(`\n🔍 [Faculty Update Validation] Checking code "${trimmedCode}" for ID != ${id}`);
@@ -136,10 +167,15 @@ async function updateFaculty(req, res) {
       return res.status(400).json({ error: `Faculty code "${trimmedCode}" already in use by ${existing.rows[0].name}.` });
     }
 
+    const deptIdToUse = userDeptId || target.department_id;
     let query = '';
     let params = [];
 
     if (password && password.trim().length > 0) {
+      const pwdCheck = validatePassword(password);
+      if (!pwdCheck.valid) {
+        return res.status(400).json({ error: pwdCheck.error });
+      }
       const salt = await bcrypt.genSalt(10);
       const password_hash = await bcrypt.hash(password, salt);
       query = `
@@ -148,7 +184,7 @@ async function updateFaculty(req, res) {
         WHERE id = $6
         RETURNING id, faculty_code, name, role, department_id
       `;
-      params = [trimmedCode, name.trim(), password_hash, role || 'faculty', department_id, id];
+      params = [trimmedCode, sanitizedName, password_hash, role || 'faculty', deptIdToUse, id];
     } else {
       query = `
         UPDATE faculty
@@ -156,7 +192,7 @@ async function updateFaculty(req, res) {
         WHERE id = $5
         RETURNING id, faculty_code, name, role, department_id
       `;
-      params = [trimmedCode, name.trim(), role || 'faculty', department_id, id];
+      params = [trimmedCode, sanitizedName, role || 'faculty', deptIdToUse, id];
     }
 
     const result = await db.query(query, params);
@@ -173,7 +209,25 @@ async function updateFaculty(req, res) {
 
 async function deleteFaculty(req, res) {
   try {
-    const result = await db.query('DELETE FROM faculty WHERE id = $1 RETURNING id, faculty_code, name', [req.params.id]);
+    const { id } = req.params;
+    const currentUserId = req.user?.id;
+    const userDeptId = req.user?.department_id;
+
+    if (currentUserId && String(currentUserId) === String(id)) {
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+    }
+
+    // Verify tenant ownership before deleting
+    const targetCheck = await db.query('SELECT id, department_id, name FROM faculty WHERE id = $1', [id]);
+    if (targetCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Faculty not found' });
+    }
+
+    if (userDeptId && String(targetCheck.rows[0].department_id) !== String(userDeptId)) {
+      return res.status(403).json({ error: 'Access denied: Cannot delete faculty in another department' });
+    }
+
+    const result = await db.query('DELETE FROM faculty WHERE id = $1 RETURNING id, faculty_code, name', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Faculty not found' });
     res.json({ message: 'Faculty deleted successfully', deleted: result.rows[0] });
   } catch (err) {
@@ -184,44 +238,32 @@ async function deleteFaculty(req, res) {
 
 async function deleteAllFaculty(req, res) {
   try {
-    const department_id = req.query.department_id || req.body.department_id;
+    // Strictly isolate by authenticated user's department
+    const department_id = req.user?.department_id || req.query.department_id || req.body.department_id;
     const currentUserId = req.user?.id;
 
-    // 1. Delete dependent subjects for this department to satisfy foreign key (faculty_id RESTRICT)
-    if (department_id) {
-      await db.query(
-        'DELETE FROM subject WHERE semester_id IN (SELECT id FROM semester WHERE department_id = $1)',
-        [department_id]
-      );
-    } else {
-      await db.query('DELETE FROM subject');
+    if (!department_id) {
+      return res.status(400).json({ error: 'department_id is required' });
     }
 
-    // 2. Delete non-admin faculty in department, never deleting current admin
+    // 1. Delete dependent subjects for this department to satisfy foreign key (faculty_id RESTRICT)
+    await db.query(
+      'DELETE FROM subject WHERE semester_id IN (SELECT id FROM semester WHERE department_id = $1)',
+      [department_id]
+    );
+
+    // 2. Delete non-admin faculty strictly in this department, preserving the current admin
     let result;
-    if (department_id) {
-      if (currentUserId) {
-        result = await db.query(
-          "DELETE FROM faculty WHERE department_id = $1 AND role != 'admin' AND id != $2 RETURNING id, faculty_code, name",
-          [department_id, currentUserId]
-        );
-      } else {
-        result = await db.query(
-          "DELETE FROM faculty WHERE department_id = $1 AND role != 'admin' RETURNING id, faculty_code, name",
-          [department_id]
-        );
-      }
+    if (currentUserId) {
+      result = await db.query(
+        "DELETE FROM faculty WHERE department_id = $1 AND role != 'admin' AND id != $2 RETURNING id, faculty_code, name",
+        [department_id, currentUserId]
+      );
     } else {
-      if (currentUserId) {
-        result = await db.query(
-          "DELETE FROM faculty WHERE role != 'admin' AND id != $1 RETURNING id, faculty_code, name",
-          [currentUserId]
-        );
-      } else {
-        result = await db.query(
-          "DELETE FROM faculty WHERE role != 'admin' RETURNING id, faculty_code, name"
-        );
-      }
+      result = await db.query(
+        "DELETE FROM faculty WHERE department_id = $1 AND role != 'admin' RETURNING id, faculty_code, name",
+        [department_id]
+      );
     }
 
     const count = result.rows.length;

@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { sanitizeText, sanitizeCode } = require('../utils/sanitize');
 
 async function getAllSubjects(req, res) {
   try {
@@ -70,9 +71,21 @@ async function createSubject(req, res) {
       block_session_count = 0
     } = req.body;
     let { subject_code } = req.body;
+    const userDeptId = req.user?.department_id;
 
     if (!name || !semester_id || !weekly_hours) {
       return res.status(400).json({ error: 'name, semester_id, and weekly_hours are required' });
+    }
+
+    // Tenant check: verify target semester belongs to admin's department
+    if (userDeptId) {
+      const semCheck = await db.query('SELECT department_id FROM semester WHERE id = $1', [semester_id]);
+      if (semCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Semester not found' });
+      }
+      if (String(semCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot add subject to another department semester' });
+      }
     }
 
     // For academic subjects, faculty is required
@@ -82,14 +95,15 @@ async function createSubject(req, res) {
 
     // For generic activities, auto-generate a subject code if none provided
     if (is_generic_activity && (!subject_code || !subject_code.trim())) {
-      // Generate a short slug from the name, e.g. "Library" -> "ACT-LIB"
       const slug = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
       subject_code = `ACT-${slug || 'GEN'}`;
     }
 
-    const trimmedCode = (subject_code || '').trim();
-    if (!trimmedCode) {
-      return res.status(400).json({ error: 'subject_code is required' });
+    const trimmedCode = sanitizeCode(subject_code, 20);
+    const sanitizedName = sanitizeText(name, 100);
+
+    if (!trimmedCode || !sanitizedName) {
+      return res.status(400).json({ error: 'Valid subject code and name are required' });
     }
 
     // Step 1: Check for duplicate subject_code within the same semester
@@ -103,7 +117,6 @@ async function createSubject(req, res) {
         field: 'subject_code'
       });
     }
-    console.log(`✅ [Subject Validation] subject_code "${trimmedCode}" is available for semester ${semester_id}.`);
 
     const effectiveFacultyId = is_generic_activity ? null : (faculty_id || null);
 
@@ -112,11 +125,9 @@ async function createSubject(req, res) {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
-    console.log(`📝 [Subject Insert] Executing insert for "${name.trim()}" (${trimmedCode}), generic=${is_generic_activity}`);
-
     const result = await db.query(insertSql, [
       trimmedCode, 
-      name.trim(), 
+      sanitizedName, 
       semester_id, 
       effectiveFacultyId, 
       weekly_hours, 
@@ -130,18 +141,9 @@ async function createSubject(req, res) {
     console.log(`🎉 [Subject Insert] Successfully created subject ID=${result.rows[0].id}`);
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('❌ [Subject Insert Error]:', {
-      message: err.message,
-      code: err.code,
-      detail: err.detail,
-      constraint: err.constraint
-    });
-
+    console.error('❌ [Subject Insert Error]:', err);
     if (err.code === '23505') {
-      if (err.constraint && err.constraint.includes('subject_code')) {
-        return res.status(400).json({ error: `Subject code already exists.` });
-      }
-      return res.status(400).json({ error: `Unique constraint violation (${err.constraint || 'primary key / code collision'}).` });
+      return res.status(400).json({ error: 'Subject code already exists.' });
     }
     res.status(500).json({ error: err.message });
   }
@@ -162,6 +164,30 @@ async function updateSubject(req, res) {
     } = req.body;
     let { subject_code } = req.body;
     const { id } = req.params;
+    const userDeptId = req.user?.department_id;
+
+    // Tenant check: verify existing subject belongs to user's department
+    if (userDeptId) {
+      const existingSubCheck = await db.query(`
+        SELECT sub.id, sem.department_id 
+        FROM subject sub
+        JOIN semester sem ON sub.semester_id = sem.id
+        WHERE sub.id = $1
+      `, [id]);
+      if (existingSubCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Subject not found' });
+      }
+      if (String(existingSubCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot edit subject in another department' });
+      }
+      // If moving to another semester, verify that semester is also in department
+      if (semester_id) {
+        const targetSemCheck = await db.query('SELECT department_id FROM semester WHERE id = $1', [semester_id]);
+        if (targetSemCheck.rows.length === 0 || String(targetSemCheck.rows[0].department_id) !== String(userDeptId)) {
+          return res.status(403).json({ error: 'Access denied: Target semester is in another department' });
+        }
+      }
+    }
 
     // For generic activities, auto-generate a code if none provided
     if (is_generic_activity && (!subject_code || !subject_code.trim())) {
@@ -169,7 +195,8 @@ async function updateSubject(req, res) {
       subject_code = `ACT-${slug || 'GEN'}`;
     }
 
-    const trimmedCode = (subject_code || '').trim();
+    const trimmedCode = sanitizeCode(subject_code, 20);
+    const sanitizedName = sanitizeText(name, 100);
 
     // Check if code is taken by another subject in the same semester
     console.log(`\n🔍 [Subject Update Validation] Checking code "${trimmedCode}" for semester ${semester_id} and ID != ${id}`);
@@ -190,7 +217,7 @@ async function updateSubject(req, res) {
     `;
     const result = await db.query(updateSql, [
       trimmedCode, 
-      name.trim(), 
+      sanitizedName, 
       semester_id, 
       effectiveFacultyId, 
       weekly_hours, 
@@ -215,7 +242,25 @@ async function updateSubject(req, res) {
 
 async function deleteSubject(req, res) {
   try {
-    const result = await db.query('DELETE FROM subject WHERE id = $1 RETURNING *', [req.params.id]);
+    const { id } = req.params;
+    const userDeptId = req.user?.department_id;
+
+    if (userDeptId) {
+      const existingSubCheck = await db.query(`
+        SELECT sub.id, sem.department_id 
+        FROM subject sub
+        JOIN semester sem ON sub.semester_id = sem.id
+        WHERE sub.id = $1
+      `, [id]);
+      if (existingSubCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Subject not found' });
+      }
+      if (String(existingSubCheck.rows[0].department_id) !== String(userDeptId)) {
+        return res.status(403).json({ error: 'Access denied: Cannot delete subject in another department' });
+      }
+    }
+
+    const result = await db.query('DELETE FROM subject WHERE id = $1 RETURNING *', [id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
     res.json({ message: 'Subject deleted successfully', deleted: result.rows[0] });
   } catch (err) {
@@ -226,16 +271,15 @@ async function deleteSubject(req, res) {
 
 async function deleteAllSubjects(req, res) {
   try {
-    const department_id = req.query.department_id || req.body.department_id;
-    let result;
-    if (department_id) {
-      result = await db.query(
-        'DELETE FROM subject WHERE semester_id IN (SELECT id FROM semester WHERE department_id = $1) RETURNING id',
-        [department_id]
-      );
-    } else {
-      result = await db.query('DELETE FROM subject RETURNING id');
+    const department_id = req.user?.department_id || req.query.department_id || req.body.department_id;
+    if (!department_id) {
+      return res.status(400).json({ error: 'department_id is required for scoped subject deletion' });
     }
+
+    const result = await db.query(
+      'DELETE FROM subject WHERE semester_id IN (SELECT id FROM semester WHERE department_id = $1) RETURNING id',
+      [department_id]
+    );
     const count = result.rows.length;
     res.json({ message: `Successfully deleted ${count} subjects`, count });
   } catch (err) {

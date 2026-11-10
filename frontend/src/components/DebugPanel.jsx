@@ -26,6 +26,12 @@ import {
 } from 'lucide-react';
 
 export default function DebugPanel() {
+  // Turn off completely in production unless explicitly opted-in via VITE_ENABLE_DEBUG
+  const isDebugAllowed = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEBUG === 'true';
+  if (!isDebugAllowed) {
+    return null;
+  }
+
   const [isOpen, setIsOpen] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [logs, setLogs] = useState(() => debugLogger.getLogs());

@@ -36,14 +36,9 @@ export default function App() {
     );
   }
 
-  // Protected Route: If unauthenticated, render Login page with DebugPanel available
+  // Protected Route: If unauthenticated, render Login page
   if (!isAuthenticated || !user) {
-    return (
-      <>
-        <Login />
-        <DebugPanel />
-      </>
-    );
+    return <Login />;
   }
 
   return (
