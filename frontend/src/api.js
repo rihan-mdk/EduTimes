@@ -4,10 +4,11 @@
 
 import { debugLogger } from './utils/debugLogger';
 
-// In production: set VITE_API_URL=https://your-app.railway.app in Vercel env vars
-// In local dev: falls back to '/api' (proxied by Vite to localhost:5000)
-const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api`
+// In production: set VITE_API_URL=https://your-backend.onrender.com in env vars
+// In local dev: falls back to '/api' (proxied by Vite to http://localhost:5000)
+const rawApiUrl = import.meta.env.VITE_API_URL;
+const API_BASE = rawApiUrl
+  ? (rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/+$/, '')}/api`)
   : '/api';
 
 export async function apiRequest(endpoint, options = {}) {
