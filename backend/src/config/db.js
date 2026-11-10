@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { newDb } = require('pg-mem');
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 
 let useMemoryDb = false;
 let memDb = null;

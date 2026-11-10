@@ -22,7 +22,10 @@ async function runMigrations() {
   let client;
   try {
     console.log('🔄 Checking PostgreSQL connection...');
-    console.log(`📡 Target: ${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || '5432'} (Database: ${process.env.PGDATABASE || 'yensync_db'})`);
+    const targetHost = process.env.DATABASE_URL
+      ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ':****@')
+      : `${process.env.PGHOST || 'localhost'}:${process.env.PGPORT || '5432'} (${process.env.PGDATABASE || 'yensync_db'})`;
+    console.log(`📡 Target: ${targetHost}`);
 
     client = await pool.connect();
 
