@@ -14,10 +14,10 @@ let pgPool = null;
 pgPool = process.env.DATABASE_URL
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // required for Neon/Railway SSL
+      ssl: { rejectUnauthorized: false }, // required for Supabase/Neon/Railway SSL
       max: 20,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 15000,
     })
   : new Pool({
       host: process.env.PGHOST || 'localhost',
