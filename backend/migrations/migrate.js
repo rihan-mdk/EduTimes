@@ -47,6 +47,7 @@ async function runMigrations() {
         version VARCHAR(255) PRIMARY KEY,
         applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
+      ALTER TABLE schema_migrations ENABLE ROW LEVEL SECURITY;
     `);
 
     const appliedRes = await client.query('SELECT version FROM schema_migrations');
