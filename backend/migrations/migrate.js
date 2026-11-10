@@ -38,15 +38,41 @@ async function runMigrations() {
       '006_scope_subject_code_uniqueness.sql',
       '007_add_semester_advisor_and_mentors.sql',
       '008_make_faculty_id_nullable_for_generic_activities.sql',
-      '009_faculty_busy_slots.sql'
+      '009_faculty_busy_slots.sql',
+      '010_enable_rls.sql'
     ];
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        version VARCHAR(255) PRIMARY KEY,
+        applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+    `);
+
+    const appliedRes = await client.query('SELECT version FROM schema_migrations');
+    const appliedSet = new Set(appliedRes.rows.map(r => r.version));
+
+    // If tables already exist before schema_migrations table was created, mark 001-010 as already applied
+    const tableCheck = await client.query("SELECT to_regclass('public.department') as dept_exists");
+    if (tableCheck.rows[0]?.dept_exists && appliedSet.size === 0) {
+      for (const file of migrationFiles) {
+        await client.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING', [file]);
+        appliedSet.add(file);
+      }
+      console.log('ℹ️ Existing database schema detected — initialized migration history.');
+    }
+
     for (const file of migrationFiles) {
+      if (appliedSet.has(file)) {
+        console.log(`⏩ ${file} (already applied)`);
+        continue;
+      }
       const filePath = path.join(__dirname, file);
       if (fs.existsSync(filePath)) {
         console.log(`⏳ Executing ${file}...`);
         const sql = fs.readFileSync(filePath, 'utf8');
         await client.query(sql);
+        await client.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING', [file]);
         console.log(`✅ ${file} applied successfully.`);
       }
     }
