@@ -5,6 +5,7 @@ const path = require('path');
 require('dotenv').config();
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
+const db = require('./config/db');
 const { globalLimiter } = require('./middleware/rateLimiters');
 const authRoutes = require('./routes/authRoutes');
 const departmentRoutes = require('./routes/departmentRoutes');
@@ -81,9 +82,13 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // ─── Health check ─────────────────────────────────────────────────────────────
-// Render / Cloud pings this every 30s. Must respond fast — no DB call here.
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', app: 'EduTimes Backend API', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    app: 'EduTimes Backend API',
+    database: db.getDatabaseStatus(),
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

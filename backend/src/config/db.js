@@ -1,34 +1,46 @@
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
-const { newDb } = require('pg-mem');
+const dns = require('dns');
+
+// Prioritize IPv4 DNS lookups to prevent EAI_AGAIN timeouts on cloud poolers
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 require('dotenv').config();
 require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+
+const isProduction = process.env.NODE_ENV === 'production';
+const hasDatabaseUrl = Boolean(process.env.DATABASE_URL);
 
 let useMemoryDb = false;
 let memDb = null;
 let pgPool = null;
+let dbConnected = false;
 
 // Initialize real PostgreSQL pool
-// Supports DATABASE_URL (Neon/Railway/Supabase) or individual PGHOST/PGUSER/etc. vars
-pgPool = process.env.DATABASE_URL
-  ? new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false }, // required for Supabase/Neon/Railway SSL
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 15000,
-    })
-  : new Pool({
-      host: process.env.PGHOST || 'localhost',
-      port: parseInt(process.env.PGPORT || '5432', 10),
-      user: process.env.PGUSER || 'postgres',
-      password: process.env.PGPASSWORD || 'postgres',
-      database: process.env.PGDATABASE || 'yensync_db',
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 1500,
-    });
+if (hasDatabaseUrl) {
+  pgPool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }, // required for Supabase/Neon/Railway SSL
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 20000,
+  });
+} else if (!isProduction) {
+  // Local development without DATABASE_URL
+  pgPool = new Pool({
+    host: process.env.PGHOST || 'localhost',
+    port: parseInt(process.env.PGPORT || '5432', 10),
+    user: process.env.PGUSER || 'postgres',
+    password: process.env.PGPASSWORD || 'postgres',
+    database: process.env.PGDATABASE || 'yensync_db',
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 1500,
+  });
+}
 
 // Handle idle connection errors to prevent unhandled 'error' events from crashing Node
 if (pgPool) {
@@ -37,11 +49,12 @@ if (pgPool) {
   });
 }
 
-// Setup embedded in-memory PostgreSQL engine fallback
+// Setup embedded in-memory PostgreSQL engine fallback (LOCAL DEV ONLY)
 function initMemoryDb() {
   if (memDb) return memDb;
 
   console.log('⚡ Initializing embedded in-memory database fallback...');
+  const { newDb } = require('pg-mem');
   memDb = newDb();
 
   // Load migrations and seed SQL
@@ -59,8 +72,6 @@ function initMemoryDb() {
   try {
     memDb.public.none(migration1);
     memDb.public.none(migration2);
-    // Migrations 003 to 008: ALTER TABLE statements may be no-ops in pg-mem
-    // since the columns are already defined in migration 001 above.
     try { memDb.public.none(migration3); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration4); } catch (e) { /* column already exists */ }
     try { memDb.public.none(migration5); } catch (e) { /* column already exists */ }
@@ -85,7 +96,7 @@ function formatSqlValue(val) {
   return `'${String(val).replace(/'/g, "''")}'`;
 }
 
-// Single-pass regex interpolation using functional replacer (prevents recursive or $ character collisions)
+// Single-pass regex interpolation using functional replacer
 function interpolateSql(text, params) {
   if (!params || !params.length) return text;
   return text.replace(/\$(\d+)\b/g, (match, digits) => {
@@ -97,16 +108,44 @@ function interpolateSql(text, params) {
   });
 }
 
-// Check initial connection
-(async () => {
-  try {
-    const client = await pgPool.connect();
-    console.log('🐘 Connected to external PostgreSQL database.');
-    client.release();
-  } catch (err) {
-    console.log('⚠️ Local PostgreSQL not detected (ECONNREFUSED). Falling back to zero-config in-memory database.');
-    useMemoryDb = true;
-    initMemoryDb();
+// Check connection with exponential retries
+(async function connectWithRetry(retries = 3, delay = 2000) {
+  if (!pgPool) {
+    if (isProduction || hasDatabaseUrl) {
+      console.error('❌ CRITICAL: DATABASE_URL is not set in Render environment variables! Data cannot be saved persistently.');
+    } else {
+      console.log('ℹ️ No PostgreSQL configured. Falling back to zero-config in-memory database for local offline development.');
+      useMemoryDb = true;
+      initMemoryDb();
+    }
+    return;
+  }
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const client = await pgPool.connect();
+      console.log('🐘 Connected to external PostgreSQL database (Supabase persistent storage active).');
+      dbConnected = true;
+      useMemoryDb = false;
+      client.release();
+      return;
+    } catch (err) {
+      console.warn(`⚠️ PostgreSQL connection attempt ${attempt}/${retries} failed:`, err.message);
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, delay));
+      } else {
+        if (hasDatabaseUrl || isProduction) {
+          console.error('❌ Failed to connect to DATABASE_URL after retries:', err.message);
+          // In production or when DATABASE_URL is given, DO NOT switch to memory DB.
+          // Keep pgPool so queries can retry when the network wakes up!
+          dbConnected = false;
+        } else {
+          console.log('⚠️ Local PostgreSQL not detected. Falling back to zero-config in-memory database for local offline testing.');
+          useMemoryDb = true;
+          initMemoryDb();
+        }
+      }
+    }
   }
 })();
 
@@ -134,10 +173,20 @@ async function query(text, params = []) {
     }
   }
 
+  if (!pgPool) {
+    throw new Error('Database connection is not configured. Please set DATABASE_URL in environment variables.');
+  }
+
   try {
     return await pgPool.query(text, params);
   } catch (err) {
-    if (err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED')) {
+    // Retry once on transient pooler connection drop
+    if (err.code === 'ECONNRESET' || err.code === 'EAI_AGAIN' || (err.message && err.message.includes('Connection terminated'))) {
+      console.warn('⚠️ Transient connection drop. Retrying query once...');
+      return await pgPool.query(text, params);
+    }
+    // Only fallback to memory if NOT in production and NO database_url was provided
+    if (!hasDatabaseUrl && !isProduction && (err.code === 'ECONNREFUSED' || (err.message && err.message.includes('ECONNREFUSED')))) {
       useMemoryDb = true;
       const mem = initMemoryDb();
       const formattedSql = interpolateSql(text, params);
@@ -156,27 +205,29 @@ const poolProxy = {
         release: () => {}
       };
     }
-    try {
-      return await pgPool.connect();
-    } catch (err) {
-      if (err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED')) {
-        useMemoryDb = true;
-        initMemoryDb();
-        return {
-          query: (t, p) => query(t, p),
-          release: () => {}
-        };
-      }
-      throw err;
+    if (!pgPool) {
+      throw new Error('Database connection is not configured. Please set DATABASE_URL in environment variables.');
     }
+    return await pgPool.connect();
   },
   query,
   on: (event, handler) => {
-    pgPool.on(event, handler);
+    if (pgPool) pgPool.on(event, handler);
   }
 };
+
+function getDatabaseStatus() {
+  return {
+    configured: Boolean(process.env.DATABASE_URL),
+    mode: useMemoryDb ? 'IN_MEMORY_EPHEMERAL' : (hasDatabaseUrl ? 'POSTGRESQL_PERSISTENT' : 'LOCAL_POSTGRES'),
+    connected: dbConnected,
+    isMemory: useMemoryDb
+  };
+}
 
 module.exports = {
   query,
   pool: poolProxy,
+  getDatabaseStatus,
+  isUsingMemory: () => useMemoryDb
 };
