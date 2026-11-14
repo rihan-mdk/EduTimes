@@ -86,6 +86,10 @@ export default function Login({ onLoginSuccess }) {
       setError('All fields are required to set up the department.');
       return;
     }
+    if (adminPassword.length < 8) {
+      setError('Password must be at least 8 characters long.');
+      return;
+    }
     setLoading(true);
     try {
       const result = await api.setupDepartment({
@@ -372,12 +376,12 @@ export default function Login({ onLoginSuccess }) {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-white/80 mb-1.5">Password</label>
+                    <label className="block text-xs font-semibold text-white/80 mb-1.5">Password <span className="text-white/50 font-normal">(Min 8 characters)</span></label>
                     <div className="relative">
                       <input
                         type={showAdminPassword ? 'text' : 'password'}
                         required
-                        placeholder="••••••••"
+                        placeholder="Min 8 characters"
                         value={adminPassword}
                         onChange={(e) => setAdminPassword(e.target.value)}
                         className="block w-full pl-3 pr-10 py-2.5 rounded-lg text-sm text-white placeholder:text-white/35 outline-none transition-all focus:ring-2 focus:ring-orange-400"

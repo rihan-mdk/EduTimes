@@ -74,8 +74,8 @@ export default function ProfileModal({ isOpen, onClose }) {
         setError('Please enter a new password.');
         return;
       }
-      if (newPassword.length < 4) {
-        setError('New password must be at least 4 characters long.');
+      if (newPassword.length < 8) {
+        setError('New password must be at least 8 characters long.');
         return;
       }
       if (newPassword !== confirmPassword) {
@@ -254,7 +254,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                     type={showNewPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min 4 characters"
+                    placeholder="Min 8 characters"
                     className="w-full pl-9 pr-10 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-slate-900"
                   />
                   <button

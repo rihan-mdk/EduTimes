@@ -204,6 +204,16 @@ export default function AdminMasterData() {
     setSaving(true);
     try {
       if (activeSubTab === 'faculty') {
+        if (!editingItem && (!formData.password || formData.password.length < 8)) {
+          addToast('Password must be at least 8 characters long.', 'error');
+          setSaving(false);
+          return;
+        }
+        if (editingItem && formData.password && formData.password.length < 8) {
+          addToast('New password must be at least 8 characters long.', 'error');
+          setSaving(false);
+          return;
+        }
         if (editingItem) {
           await api.updateFaculty(editingItem.id, formData);
         } else {
@@ -1179,7 +1189,7 @@ export default function AdminMasterData() {
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                      Password {editingItem && <span className="text-xs text-slate-400 font-normal">(Leave blank to keep current)</span>}
+                      Password {editingItem ? <span className="text-xs text-slate-400 font-normal">(Leave blank to keep current)</span> : <span className="text-xs text-slate-400 font-normal">(Min 8 characters)</span>}
                     </label>
                     <div className="relative">
                       <input
@@ -1187,7 +1197,7 @@ export default function AdminMasterData() {
                         required={!editingItem}
                         value={formData.password || ''}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        placeholder="••••••••"
+                        placeholder={editingItem ? "Leave blank to keep current" : "Min 8 characters"}
                         className="w-full pl-3 pr-10 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                       />
                       <button
