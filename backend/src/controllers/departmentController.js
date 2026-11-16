@@ -1,8 +1,14 @@
 const db = require('../config/db');
+const cache = require('../utils/cache');
 
 async function getAllDepartments(req, res) {
   try {
+    const cached = cache.get('departments:all');
+    if (cached) {
+      return res.json(cached);
+    }
     const result = await db.query('SELECT * FROM department ORDER BY id ASC');
+    cache.set('departments:all', result.rows, 5 * 60 * 1000);
     res.json(result.rows);
   } catch (err) {
     console.error('[Department] Error fetching departments:', err);
@@ -44,6 +50,7 @@ async function createDepartment(req, res) {
 
     const insertSql = 'INSERT INTO department (name, code) VALUES ($1, $2) RETURNING *';
     const result = await db.query(insertSql, [trimmedName, derivedCode]);
+    cache.invalidatePrefix('departments');
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('❌ [Department Insert Error]:', err);

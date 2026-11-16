@@ -39,7 +39,8 @@ async function runMigrations() {
       '007_add_semester_advisor_and_mentors.sql',
       '008_make_faculty_id_nullable_for_generic_activities.sql',
       '009_faculty_busy_slots.sql',
-      '010_enable_rls.sql'
+      '010_enable_rls.sql',
+      '011_performance_indexes.sql'
     ];
 
     await client.query(`

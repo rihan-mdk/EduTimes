@@ -105,16 +105,24 @@ async function createBusySlots(req, res) {
     }
 
     const sanitizedReason = reason ? sanitizeText(reason, 255) : null;
-    const inserted = [];
-    for (const timeslot_id of timeslot_ids) {
-      const result = await db.query(`
+    let inserted = [];
+    if (timeslot_ids.length > 0) {
+      const valueClauses = [];
+      const params = [];
+      let paramIdx = 1;
+      for (const timeslot_id of timeslot_ids) {
+        valueClauses.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`);
+        params.push(faculty_id, timeslot_id, academic_year, sanitizedReason);
+      }
+      const batchQuery = `
         INSERT INTO faculty_busy_slot (faculty_id, timeslot_id, academic_year, reason)
-        VALUES ($1, $2, $3, $4)
+        VALUES ${valueClauses.join(', ')}
         ON CONFLICT (faculty_id, timeslot_id, academic_year) DO UPDATE
           SET reason = EXCLUDED.reason
         RETURNING *
-      `, [faculty_id, timeslot_id, academic_year, sanitizedReason]);
-      inserted.push(result.rows[0]);
+      `;
+      const result = await db.query(batchQuery, params);
+      inserted = result.rows;
     }
 
     res.status(201).json({ created: inserted.length, slots: inserted });

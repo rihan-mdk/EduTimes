@@ -20,6 +20,10 @@ const busySlotRoutes = require('./routes/busySlotRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Enable trust proxy for cloud deployment (Render, AWS, Cloudflare, Vercel)
+// Ensures correct client IP detection in rate limiters and loggers behind reverse proxies
+app.set('trust proxy', 1);
+
 // ─── CORS Configuration ────────────────────────────────────────────────────────
 // Whitelist default allowed origins (including user's Vercel deployment and local dev)
 const defaultOrigins = [
@@ -81,7 +85,8 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
-// ─── Health check ─────────────────────────────────────────────────────────────
+// ─── Health Checks ────────────────────────────────────────────────────────────
+// Shallow liveness probe (checks event loop responsiveness)
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -89,6 +94,31 @@ app.get('/api/health', (req, res) => {
     database: db.getDatabaseStatus(),
     timestamp: new Date().toISOString()
   });
+});
+
+// Deep readiness probe (verifies database pool connectivity & measures latency)
+app.get('/api/health/ready', async (req, res) => {
+  const start = Date.now();
+  try {
+    await db.query('SELECT 1');
+    const dbLatencyMs = Date.now() - start;
+    res.json({
+      status: 'ready',
+      database: {
+        ...db.getDatabaseStatus(),
+        connected: true,
+        latencyMs: dbLatencyMs
+      },
+      uptimeSec: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'unhealthy',
+      error: `Database probe failed: ${err.message}`,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
@@ -115,10 +145,43 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: err.message || 'An unexpected server error occurred.' });
 });
 
+let server;
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`🚀 EduTimes Backend API running on port ${PORT}`);
   });
+
+  // Recommended keep-alive timeout configuration for cloud load balancers (Render/AWS/Cloudflare)
+  server.keepAliveTimeout = 61000;
+  server.headersTimeout = 65000;
+
+  // Graceful shutdown handling for container redeployments and SIGTERM/SIGINT
+  const gracefulShutdown = (signal) => {
+    console.log(`\n🛑 [Shutdown] Received ${signal}. Draining connections and stopping server...`);
+    if (!server) process.exit(0);
+
+    server.close(async () => {
+      console.log('✅ [Shutdown] HTTP listener closed.');
+      try {
+        if (db.pool && typeof db.pool.end === 'function') {
+          await db.pool.end();
+          console.log('✅ [Shutdown] Database pool closed.');
+        }
+      } catch (poolErr) {
+        console.error('⚠️ [Shutdown] Error closing database pool:', poolErr.message);
+      }
+      process.exit(0);
+    });
+
+    // Force terminate if graceful shutdown hangs
+    setTimeout(() => {
+      console.error('⚠️ [Shutdown] Forcible shutdown timeout reached. Terminating process.');
+      process.exit(1);
+    }, 10000).unref();
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 }
 
 // ─── Process-level safety — prevent container crashes ─────────────────────────

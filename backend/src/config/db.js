@@ -19,14 +19,18 @@ let memDb = null;
 let pgPool = null;
 let dbConnected = false;
 
+const poolMax = parseInt(process.env.PGPOOL_MAX || '15', 10);
+const poolIdleTimeout = parseInt(process.env.PGPOOL_IDLE_TIMEOUT || '30000', 10);
+const poolConnTimeout = parseInt(process.env.PGPOOL_CONN_TIMEOUT || '10000', 10);
+
 // Initialize real PostgreSQL pool
 if (hasDatabaseUrl) {
   pgPool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }, // required for Supabase/Neon/Railway SSL
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 20000,
+    max: poolMax,
+    idleTimeoutMillis: poolIdleTimeout,
+    connectionTimeoutMillis: poolConnTimeout,
   });
 } else if (!isProduction) {
   // Local development without DATABASE_URL
@@ -36,9 +40,9 @@ if (hasDatabaseUrl) {
     user: process.env.PGUSER || 'postgres',
     password: process.env.PGPASSWORD || 'postgres',
     database: process.env.PGDATABASE || 'yensync_db',
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 1500,
+    max: poolMax,
+    idleTimeoutMillis: poolIdleTimeout,
+    connectionTimeoutMillis: poolConnTimeout,
   });
 }
 
@@ -68,6 +72,7 @@ function initMemoryDb() {
   const migration8 = fs.readFileSync(path.join(__dirname, '../../migrations/008_make_faculty_id_nullable_for_generic_activities.sql'), 'utf8');
   const migration9 = fs.readFileSync(path.join(__dirname, '../../migrations/009_faculty_busy_slots.sql'), 'utf8');
   const migration10 = fs.readFileSync(path.join(__dirname, '../../migrations/010_enable_rls.sql'), 'utf8');
+  const migration11 = fs.readFileSync(path.join(__dirname, '../../migrations/011_performance_indexes.sql'), 'utf8');
 
   try {
     memDb.public.none(migration1);
@@ -80,7 +85,8 @@ function initMemoryDb() {
     try { memDb.public.none(migration8); } catch (e) { /* constraint already altered */ }
     try { memDb.public.none(migration9); } catch (e) { /* table or index already exists */ }
     try { memDb.public.none(migration10); } catch (e) { /* rls noop in pg-mem */ }
-    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-010!');
+    try { memDb.public.none(migration11); } catch (e) { /* index already exists or not supported in mem */ }
+    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-011!');
   } catch (err) {
     console.warn('Memory DB init note:', err.message);
   }

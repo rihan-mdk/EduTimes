@@ -1,7 +1,12 @@
 const db = require('../config/db');
+const cache = require('../utils/cache');
 
 async function getAllTimeslots(req, res) {
   try {
+    const cached = cache.get('timeslots:all');
+    if (cached) {
+      return res.json(cached);
+    }
     const result = await db.query(`
       SELECT * FROM timeslot 
       ORDER BY 
@@ -16,6 +21,7 @@ async function getAllTimeslots(req, res) {
         END,
         period_number ASC
     `);
+    cache.set('timeslots:all', result.rows, 5 * 60 * 1000);
     res.json(result.rows);
   } catch (err) {
     console.error('[Timeslot] Error fetching timeslots:', err);
@@ -67,6 +73,7 @@ async function createTimeslot(req, res) {
     console.log(`📝 [Timeslot Insert] Executing insert for ${dayName} Period ${periodNum}`);
 
     const result = await db.query(insertSql, [dayName, periodNum, start_time, end_time]);
+    cache.invalidatePrefix('timeslots');
     console.log(`🎉 [Timeslot Insert] Successfully created timeslot ID=${result.rows[0].id}`);
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -109,6 +116,7 @@ async function updateTimeslot(req, res) {
     const result = await db.query(updateSql, [dayName, periodNum, start_time, end_time, id]);
 
     if (result.rows.length === 0) return res.status(404).json({ error: 'Timeslot not found' });
+    cache.invalidatePrefix('timeslots');
     res.json(result.rows[0]);
   } catch (err) {
     console.error('❌ [Timeslot Update Error]:', err);
@@ -123,6 +131,7 @@ async function deleteTimeslot(req, res) {
   try {
     const result = await db.query('DELETE FROM timeslot WHERE id = $1 RETURNING *', [req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Timeslot not found' });
+    cache.invalidatePrefix('timeslots');
     console.log(`🗑️ [Timeslot Delete] Deleted timeslot ID=${result.rows[0].id} (${result.rows[0].day} P${result.rows[0].period_number})`);
     res.json({ message: 'Timeslot deleted successfully', deleted: result.rows[0] });
   } catch (err) {

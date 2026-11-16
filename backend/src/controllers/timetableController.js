@@ -1,10 +1,16 @@
 const db = require('../config/db');
+const cache = require('../utils/cache');
 const { detectClash } = require('../services/clashDetector');
 const { generateTimetable } = require('../services/scheduler');
 
 // Helper to fetch full system lookup maps
 async function fetchContextData(academicYear) {
-  const [subjectsRes, existingRes, timeslotsRes, semestersRes] = await Promise.all([
+  const timeslotsPromise = cache.getOrSet('timeslots:all', async () => {
+    const res = await db.query('SELECT * FROM timeslot ORDER BY id ASC');
+    return res.rows;
+  }, 5 * 60 * 1000);
+
+  const [subjectsRes, existingRes, timeslotsRows, semestersRes] = await Promise.all([
     db.query(`
       SELECT sub.*, f.name as faculty_name, f.faculty_code, sem.number as semester_number
       FROM subject sub
@@ -19,7 +25,7 @@ async function fetchContextData(academicYear) {
       LEFT JOIN semester sem ON te.semester_id = sem.id
       WHERE te.academic_year = $1
     `, [academicYear]),
-    db.query('SELECT * FROM timeslot ORDER BY id ASC'),
+    timeslotsPromise,
     db.query('SELECT * FROM semester ORDER BY number ASC')
   ]);
 
@@ -27,7 +33,7 @@ async function fetchContextData(academicYear) {
   subjectsRes.rows.forEach(s => subjectsMap.set(s.id, s));
 
   const timeslotsMap = new Map();
-  timeslotsRes.rows.forEach(t => timeslotsMap.set(t.id, t));
+  timeslotsRows.forEach(t => timeslotsMap.set(t.id, t));
 
   const semestersMap = new Map();
   semestersRes.rows.forEach(s => semestersMap.set(s.id, s));
@@ -36,7 +42,7 @@ async function fetchContextData(academicYear) {
     subjects: subjectsRes.rows,
     subjectsMap,
     existingEntries: existingRes.rows,
-    timeslots: timeslotsRes.rows,
+    timeslots: timeslotsRows,
     timeslotsMap,
     semesters: semestersRes.rows,
     semestersMap
@@ -464,15 +470,23 @@ async function autoGenerateTimetable(req, res) {
         }
       }
 
-      const insertedEntries = [];
-      for (const entry of solution.schedule) {
-        const sessionType = entry.session_type || 'theory';
-        const insRes = await client.query(`
+      let insertedEntries = [];
+      if (solution.schedule.length > 0) {
+        const valueClauses = [];
+        const params = [];
+        let paramIdx = 1;
+        for (const entry of solution.schedule) {
+          const sessionType = entry.session_type || 'theory';
+          valueClauses.push(`($${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++}, $${paramIdx++})`);
+          params.push(entry.subject_id, entry.semester_id, entry.timeslot_id, entry.academic_year, sessionType);
+        }
+        const batchQuery = `
           INSERT INTO timetable_entry (subject_id, semester_id, timeslot_id, academic_year, session_type)
-          VALUES ($1, $2, $3, $4, $5)
+          VALUES ${valueClauses.join(', ')}
           RETURNING *
-        `, [entry.subject_id, entry.semester_id, entry.timeslot_id, entry.academic_year, sessionType]);
-        insertedEntries.push(insRes.rows[0]);
+        `;
+        const insRes = await client.query(batchQuery, params);
+        insertedEntries = insRes.rows;
       }
 
       await client.query('COMMIT');
