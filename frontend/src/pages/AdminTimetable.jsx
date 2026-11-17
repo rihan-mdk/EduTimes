@@ -1237,7 +1237,7 @@ export default function AdminTimetable() {
     }
   };
 
-  // 7. Word Export Feature (Clean professional tabled structure, editable .doc)
+  // 7. Word Export Feature (Clean professional tabled structure with solid gridlines, editable .doc)
   const handleExportWord = () => {
     try {
       const semNum = currentSemester?.number || '';
@@ -1251,39 +1251,22 @@ export default function AdminTimetable() {
       const esc = (v) => String(v === null || v === undefined ? '' : v)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-      const getSlotText = (day, p, mergeMap) => {
+      // Only display subject codes in the timetable grid cells
+      const getSlotText = (day, p) => {
         const entries = gridMap.get(`${day}_${p}`) || [];
         if (entries.length === 0) return '';
-        return entries.map(e => {
-          const sub = subjects.find(s => String(s.id) === String(e.subject_id));
-          const fac = resolveFacultyInfo(sub || e);
-          const facStr = fac.code ? ` [${fac.code}]` : '';
-          let typeTag = '';
-          if (mergeMap && mergeMap.has(p)) typeTag = ` ${mergeMap.get(p).tag}`;
-          else if (e.is_lab || e.session_type === 'lab') typeTag = ' [LAB]';
-          else if (e.session_type === 'activity') typeTag = ' [ACT]';
-          return `${esc(e.subject_code || '')}${esc(facStr)}${typeTag}`;
-        }).join(' / ');
+        return entries
+          .map(e => esc(e.subject_code || ''))
+          .filter(Boolean)
+          .join(' / ');
       };
 
-      const thStyle = 'border:1px solid black;padding:5px 8px;background:#f2f2f2;font-family:"Times New Roman",serif;font-size:10pt;font-weight:bold;text-align:center;';
-      const tdStyle = 'border:1px solid black;padding:4px 8px;font-family:"Times New Roman",serif;font-size:10pt;text-align:center;';
-      const tdBreakStyle = 'border:1px solid black;padding:4px 3px;font-family:"Times New Roman",serif;font-size:9pt;font-weight:bold;text-align:center;writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;background:#f9f9f9;';
-      const tdDayStyle = 'border:1px solid black;padding:5px 8px;font-family:"Times New Roman",serif;font-size:10pt;font-weight:bold;text-align:center;background:#fafafa;';
+      const thStyle = 'border:1.0pt solid #000000;mso-border-alt:solid #000000 1.0pt;padding:5pt 4pt;background-color:#f2f2f2;font-family:"Times New Roman",serif;font-size:9.5pt;font-weight:bold;text-align:center;';
+      const tdStyle = 'border:1.0pt solid #000000;mso-border-alt:solid #000000 1.0pt;padding:5pt 4pt;font-family:"Times New Roman",serif;font-size:10pt;font-weight:bold;text-align:center;';
+      const tdBreakStyle = 'border:1.0pt solid #000000;mso-border-alt:solid #000000 1.0pt;padding:4pt 2pt;font-family:"Times New Roman",serif;font-size:8pt;font-weight:bold;text-align:center;background-color:#f9f9f9;';
+      const tdDayStyle = 'border:1.0pt solid #000000;mso-border-alt:solid #000000 1.0pt;padding:5pt 6pt;font-family:"Times New Roman",serif;font-size:10pt;font-weight:bold;text-align:center;background-color:#f4f4f4;';
 
-      const timeHeaders = [
-        { label: '9:00 AM<br/>To<br/>9:55 AM', key: 1 },
-        { label: '9:55 AM<br/>To<br/>10:50 AM', key: 2 },
-        null, // TEA BREAK
-        { label: '11:10 AM<br/>To<br/>12:05 PM', key: 3 },
-        { label: '12:05 PM<br/>To<br/>1:00 PM', key: 4 },
-        null, // LUNCH BREAK
-        { label: '1:50 PM<br/>To<br/>2:40 PM', key: 5 },
-        { label: '2:40 PM<br/>To<br/>3:30 PM', key: 6 },
-        { label: '3:30 PM<br/>To<br/>4:15 PM', key: 7 },
-      ];
-
-      // Build timetable rows
+      // Build timetable rows (strictly subject codes only in grid)
       let dayRowsHtml = '';
       DAYS.forEach((day) => {
         const getMergeableSlot = (p) => {
@@ -1308,21 +1291,20 @@ export default function AdminTimetable() {
             addedMerged.add(p);
             const items = gridMap.get(`${day}_${p}`) || [];
             const e = items[0];
-            const sub = subjects.find(s => String(s.id) === String(e?.subject_id));
-            const fac = resolveFacultyInfo(sub || e);
-            const content = `${esc(e?.subject_code || '')}${fac.code ? ` [${esc(fac.code)}]` : ''} ${mergeInfo.tag}`;
+            // Only subject code in merged block
+            const content = esc(e?.subject_code || '');
             return `<td colspan="${mergeInfo.span}" style="${tdStyle}">${content}</td>`;
           }
           if (mergeInfo) return '';
-          return `<td style="${tdStyle}">${getSlotText(day, p, mergeMap)}</td>`;
+          return `<td style="${tdStyle}">${getSlotText(day, p)}</td>`;
         };
 
         cells += renderCell(1);
         cells += renderCell(2);
-        cells += `<td style="${tdBreakStyle}">TEA BREAK</td>`;
+        cells += `<td style="${tdBreakStyle}">TEA<br/>BREAK</td>`;
         cells += renderCell(3);
         cells += renderCell(4);
-        cells += `<td style="${tdBreakStyle}">LUNCH BREAK</td>`;
+        cells += `<td style="${tdBreakStyle}">LUNCH<br/>BREAK</td>`;
         cells += renderCell(5);
         cells += renderCell(6);
         cells += renderCell(7);
@@ -1330,7 +1312,7 @@ export default function AdminTimetable() {
         dayRowsHtml += `<tr>${cells}</tr>`;
       });
 
-      // Build subject legend
+      // Build subject legend (full 3-column reference: Subject Code | Subject | Faculty)
       const seen = new Set();
       const legendEntries = timetableEntries
         .filter(e => {
@@ -1345,9 +1327,9 @@ export default function AdminTimetable() {
         const sub = subjects.find(s => String(s.id) === String(e.subject_id)) || {};
         const facInfo = resolveFacultyInfo(sub || e);
         legendRowsHtml += `<tr>
-          <td style="${tdStyle};text-align:left;">${esc(e.subject_code || sub.code || '')}</td>
-          <td style="${tdStyle};text-align:left;">${esc(e.subject_name || sub.name || '')}</td>
-          <td style="${tdStyle};text-align:left;">${esc(facInfo.name)}${facInfo.code ? ` [${esc(facInfo.code)}]` : ''}</td>
+          <td style="${tdStyle};text-align:center;font-weight:bold;">${esc(e.subject_code || sub.code || '')}</td>
+          <td style="${tdStyle};text-align:left;font-weight:normal;">${esc(e.subject_name || sub.name || '')}</td>
+          <td style="${tdStyle};text-align:left;font-weight:normal;">${esc(facInfo.name)}${facInfo.code ? ` [${esc(facInfo.code)}]` : ''}</td>
         </tr>`;
       });
       if (!legendRowsHtml) {
@@ -1355,13 +1337,13 @@ export default function AdminTimetable() {
       }
 
       const timeHeaderCells = `
-        <th style="${thStyle}">Day / Time</th>
+        <th style="${thStyle};width:10%;">Day / Time</th>
         <th style="${thStyle}">9:00 AM<br/>To<br/>9:55 AM</th>
         <th style="${thStyle}">9:55 AM<br/>To<br/>10:50 AM</th>
-        <th style="${thStyle};background:#f9f9f9;width:30px;">TEA<br/>BREAK</th>
+        <th style="${thStyle};background-color:#f9f9f9;width:24pt;">TEA<br/>BREAK</th>
         <th style="${thStyle}">11:10 AM<br/>To<br/>12:05 PM</th>
         <th style="${thStyle}">12:05 PM<br/>To<br/>1:00 PM</th>
-        <th style="${thStyle};background:#f9f9f9;width:30px;">LUNCH<br/>BREAK</th>
+        <th style="${thStyle};background-color:#f9f9f9;width:24pt;">LUNCH<br/>BREAK</th>
         <th style="${thStyle}">1:50 PM<br/>To<br/>2:40 PM</th>
         <th style="${thStyle}">2:40 PM<br/>To<br/>3:30 PM</th>
         <th style="${thStyle}">3:30 PM<br/>To<br/>4:15 PM</th>
@@ -1375,25 +1357,75 @@ export default function AdminTimetable() {
 <meta charset='utf-8'>
 <title>Timetable - ${esc(deptCode)} Semester ${semNum} AY ${esc(academicYear)}</title>
 <!--[if gte mso 9]>
-<xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml>
+<xml>
+  <w:WordDocument>
+    <w:View>Print</w:View>
+    <w:Zoom>100</w:Zoom>
+    <w:DoNotOptimizeForBrowser/>
+  </w:WordDocument>
+</xml>
 <![endif]-->
 <style>
-  body { font-family: "Times New Roman", serif; font-size: 11pt; margin: 20px; }
-  h1 { font-size: 16pt; font-weight: bold; text-align: center; margin: 0; }
-  h2 { font-size: 12pt; font-weight: bold; text-align: center; margin: 2px 0; }
-  .address { font-size: 10pt; text-align: center; margin: 1px 0; }
-  .header-block { text-align: center; border-bottom: 2px solid black; padding-bottom: 8px; margin-bottom: 10px; }
-  .info-bar { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .info-bar td { border: 1px solid black; padding: 5px 10px; font-size: 10pt; font-weight: bold; text-align: center; }
-  .timetable { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-  .legend { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .admin-bar { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-  .admin-bar td { border: 1px solid black; padding: 6px 10px; font-size: 10pt; }
-  .signatures { width: 100%; margin-top: 20px; }
-  .signatures td { text-align: center; padding-top: 24px; border-top: 1px solid black; font-weight: bold; font-size: 10pt; }
+  @page Section1 {
+    size: 841.9pt 595.3pt;
+    mso-page-orientation: landscape;
+    margin: 36.0pt 36.0pt 36.0pt 36.0pt;
+    mso-header-margin: 18.0pt;
+    mso-footer-margin: 18.0pt;
+  }
+  div.Section1 {
+    page: Section1;
+  }
+  body {
+    font-family: "Times New Roman", Times, serif;
+    font-size: 10.5pt;
+    color: #000000;
+  }
+  h1 {
+    font-size: 16pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 0;
+    text-transform: uppercase;
+    font-family: "Times New Roman", Times, serif;
+  }
+  h2 {
+    font-size: 11.5pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 2pt 0;
+    font-family: "Times New Roman", Times, serif;
+  }
+  .address {
+    font-size: 9.5pt;
+    text-align: center;
+    margin: 1pt 0;
+    font-family: "Times New Roman", Times, serif;
+  }
+  .header-block {
+    text-align: center;
+    border-bottom: 2.0pt solid #000000;
+    mso-border-bottom-alt: solid #000000 2.0pt;
+    padding-bottom: 6pt;
+    margin-bottom: 6pt;
+  }
+  table.mso-table {
+    width: 100%;
+    border-collapse: collapse;
+    mso-table-lspace: 0pt;
+    mso-table-rspace: 0pt;
+    border: 1.0pt solid #000000;
+    mso-border-alt: solid #000000 1.0pt;
+    margin-bottom: 6pt;
+  }
+  table.mso-table th, table.mso-table td {
+    border: 1.0pt solid #000000;
+    mso-border-alt: solid #000000 1.0pt;
+  }
 </style>
 </head>
 <body>
+<div class="Section1">
 
 <div class="header-block">
   <h1>YENEPOYA INSTITUTE OF TECHNOLOGY</h1>
@@ -1402,15 +1434,23 @@ export default function AdminTimetable() {
   <h2>TIME TABLE - ${semType} SEMESTER (AY ${esc(academicYear)})</h2>
 </div>
 
-<table class="info-bar">
+<!-- Class Information Bar -->
+<table border="1" cellspacing="0" cellpadding="4" class="mso-table" style="margin-bottom: 6pt;">
   <tr>
-    <td style="width:33%">CLASS: ${esc(romanSemester)} SEMESTER</td>
-    <td style="width:34%">CLASS ROOM: ${esc(classRoom)}</td>
-    <td style="width:33%">W.E.F: ${esc(wefDate)}</td>
+    <td style="width:33%;border:1.0pt solid #000;mso-border-alt:solid #000 1.0pt;padding:4pt 8pt;font-weight:bold;text-align:left;font-size:10pt;">
+      CLASS: ${esc(romanSemester)} SEMESTER
+    </td>
+    <td style="width:34%;border:1.0pt solid #000;mso-border-alt:solid #000 1.0pt;padding:4pt 8pt;font-weight:bold;text-align:center;font-size:10pt;">
+      CLASS ROOM: ${esc(classRoom)}
+    </td>
+    <td style="width:33%;border:1.0pt solid #000;mso-border-alt:solid #000 1.0pt;padding:4pt 8pt;font-weight:bold;text-align:right;font-size:10pt;">
+      W.E.F: ${esc(wefDate)}
+    </td>
   </tr>
 </table>
 
-<table class="timetable">
+<!-- Timetable Schedule Grid (Codes Only) -->
+<table border="1" cellspacing="0" cellpadding="4" class="mso-table" style="margin-bottom: 6pt;">
   <thead>
     <tr>${timeHeaderCells}</tr>
   </thead>
@@ -1419,10 +1459,11 @@ export default function AdminTimetable() {
   </tbody>
 </table>
 
-<table class="legend">
+<!-- Subject & Faculty Reference Legend -->
+<table border="1" cellspacing="0" cellpadding="4" class="mso-table" style="margin-bottom: 6pt;">
   <thead>
     <tr>
-      <th style="${thStyle};width:14%;text-align:left;">Subject Code</th>
+      <th style="${thStyle};width:14%;">Subject Code</th>
       <th style="${thStyle};width:43%;text-align:left;">Subject</th>
       <th style="${thStyle};width:43%;text-align:left;">Faculty</th>
     </tr>
@@ -1432,23 +1473,42 @@ export default function AdminTimetable() {
   </tbody>
 </table>
 
-<table class="admin-bar">
+<!-- Class Advisor & Mentors Section -->
+<table border="1" cellspacing="0" cellpadding="4" class="mso-table" style="margin-bottom: 12pt;">
   <tr>
-    <td style="width:50%;"><strong>Class Advisor:</strong> ${esc(advisor)}</td>
-    <td style="width:50%;"><strong>Mentors:</strong> ${esc(mentors)}</td>
+    <td style="width:50%;border:1.0pt solid #000;mso-border-alt:solid #000 1.0pt;padding:5pt 8pt;font-size:10pt;">
+      <strong>Class Advisor:</strong> ${esc(advisor)}
+    </td>
+    <td style="width:50%;border:1.0pt solid #000;mso-border-alt:solid #000 1.0pt;padding:5pt 8pt;font-size:10pt;">
+      <strong>Mentors:</strong> ${esc(mentors)}
+    </td>
   </tr>
 </table>
 
-<table class="signatures">
+<!-- Signature Section -->
+<table cellspacing="0" cellpadding="0" style="width:100%;margin-top:14pt;border-collapse:collapse;border:none;">
   <tr>
-    <td style="width:33%;border-top:1px solid black;">Time Table Coordinator</td>
-    <td style="width:34%;border-top:1px solid black;">Head of the Department</td>
-    <td style="width:33%;border-top:1px solid black;">Principal</td>
+    <td style="width:33%;text-align:center;border:none;padding-top:18pt;">
+      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:160pt;padding-top:3pt;font-weight:bold;font-size:10pt;">
+        Time Table Coordinator
+      </div>
+    </td>
+    <td style="width:34%;text-align:center;border:none;padding-top:18pt;">
+      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:160pt;padding-top:3pt;font-weight:bold;font-size:10pt;">
+        Head of the Department
+      </div>
+    </td>
+    <td style="width:33%;text-align:center;border:none;padding-top:18pt;">
+      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:160pt;padding-top:3pt;font-weight:bold;font-size:10pt;">
+        Principal
+      </div>
+    </td>
   </tr>
 </table>
 
-<p style="font-size:8pt;color:#888;text-align:right;margin-top:16px;">Generated on ${todayStr}</p>
+<p style="font-size:8pt;color:#666666;text-align:right;margin-top:14pt;font-family:'Times New Roman',serif;">Generated on ${todayStr}</p>
 
+</div>
 </body>
 </html>`;
 
