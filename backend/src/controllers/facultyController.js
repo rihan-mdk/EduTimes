@@ -4,7 +4,7 @@ const { sanitizeText, sanitizeCode, validatePassword } = require('../utils/sanit
 
 async function getAllFaculty(req, res) {
   try {
-    const { department_id } = req.query;
+    const department_id = req.query.department_id || (req.user?.role !== 'superadmin' ? req.user?.department_id : null);
     let query = `
       SELECT f.id, f.faculty_code, f.name, f.role, f.department_id, d.name as department_name, d.code as department_code
       FROM faculty f

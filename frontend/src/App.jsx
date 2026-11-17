@@ -50,7 +50,9 @@ export default function App() {
       <main className="flex-1 max-w-[1720px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-5">
         {user.role === 'admin' ? (
           <>
-            {adminActiveTab === 'timetable' && <AdminTimetable />}
+            {adminActiveTab === 'timetable' && (
+              <AdminTimetable onNavigateToMasterData={() => setAdminActiveTab('masterdata')} />
+            )}
             {adminActiveTab === 'masterdata' && <AdminMasterData />}
           </>
         ) : (

@@ -3,7 +3,7 @@ const { sanitizeText } = require('../utils/sanitize');
 
 async function getAllSemesters(req, res) {
   try {
-    const department_id = req.query.department_id;
+    const department_id = req.query.department_id || (req.user?.role !== 'superadmin' ? req.user?.department_id : null);
     let query = `
       SELECT s.*, d.name as department_name, d.code as department_code
       FROM semester s

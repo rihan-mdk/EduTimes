@@ -90,11 +90,23 @@ export default function AdminMasterData() {
     fetchAllData();
   }, [activeDepartment?.id]);
 
-  // All lists are already scoped by the fetch — use directly
+  // All lists are strictly isolated to active department
   const targetDeptId = activeDepartment?.id ? String(activeDepartment.id) : null;
-  const filteredFaculty = faculty;
-  const filteredSemesters = semesters;
-  const filteredSubjects = subjects;
+  const filteredFaculty = targetDeptId
+    ? faculty.filter(f => String(f.department_id) === targetDeptId)
+    : faculty;
+  const filteredSemesters = targetDeptId
+    ? semesters.filter(s => String(s.department_id) === targetDeptId)
+    : semesters;
+  const filteredSubjects = targetDeptId
+    ? subjects.filter(s => String(s.department_id) === targetDeptId)
+    : subjects;
+
+  const availableDepartments = user?.role === 'superadmin'
+    ? departments
+    : (departments.filter(d => String(d.id) === targetDeptId || String(d.id) === String(activeDepartment?.id)).length > 0
+        ? departments.filter(d => String(d.id) === targetDeptId || String(d.id) === String(activeDepartment?.id))
+        : (activeDepartment ? [activeDepartment] : departments));
 
   // Semesters sorted numerically
   const sortedSemesters = React.useMemo(() => {
@@ -1248,9 +1260,10 @@ export default function AdminMasterData() {
                       <select
                         value={formData.department_id || ''}
                         onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                        disabled={user?.role !== 'superadmin'}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-500"
                       >
-                        {departments.map((d) => (
+                        {availableDepartments.map((d) => (
                           <option key={d.id} value={d.id}>
                             {d.name} {d.code ? `(${d.code})` : ''}
                           </option>
@@ -1308,9 +1321,10 @@ export default function AdminMasterData() {
                   <select
                     value={formData.department_id || ''}
                     onChange={(e) => setFormData({ ...formData, department_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                    disabled={user?.role !== 'superadmin'}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white disabled:bg-slate-100 disabled:text-slate-500"
                   >
-                    {departments.map((d) => (
+                    {availableDepartments.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name} {d.code ? `(${d.code})` : ''}
                       </option>

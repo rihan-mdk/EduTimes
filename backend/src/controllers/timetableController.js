@@ -107,8 +107,10 @@ async function getTimetable(req, res) {
       query += ` AND te.semester_id = $${params.length}`;
     }
 
-    if (department_id) {
-      params.push(department_id);
+    // Strict multi-tenant isolation: enforce department scoping
+    const effectiveDeptId = department_id || (req.user?.role !== 'superadmin' && !faculty_id ? req.user?.department_id : null);
+    if (effectiveDeptId) {
+      params.push(effectiveDeptId);
       query += ` AND sem.department_id = $${params.length}`;
     }
 

@@ -27,7 +27,8 @@ import {
   Plus,
   CalendarOff,
   ChevronRight,
-  Info
+  Info,
+  GraduationCap
 } from 'lucide-react';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -112,7 +113,7 @@ function computeLabMerges(getLabEntryAt) {
   return { mergeMap, skipPeriods };
 }
 
-export default function AdminTimetable() {
+export default function AdminTimetable({ onNavigateToMasterData }) {
   const { activeDepartment } = useAuth();
   const { addToast } = useToast();
   const gridRef = useRef(null);
@@ -208,29 +209,31 @@ export default function AdminTimetable() {
     async function init() {
       setLoading(true);
       try {
+        const deptId = activeDepartment?.id;
         const [semRes, subRes, tsRes, calRes, facRes] = await Promise.all([
-          api.getSemesters(),
-          api.getSubjects(),
+          api.getSemesters(deptId ? { department_id: deptId } : {}),
+          api.getSubjects(deptId ? { department_id: deptId } : {}),
           api.getTimeslots(),
           api.getCalendar().catch(() => []),
-          api.getFaculty().catch(() => [])
+          api.getFaculty(deptId ? { department_id: deptId } : {}).catch(() => [])
         ]);
-        setSemesters(semRes);
-        setSubjects(subRes);
-        setTimeslots(tsRes);
+        setSemesters(semRes || []);
+        setSubjects(subRes || []);
+        setTimeslots(tsRes || []);
         setCalendarDates(Array.isArray(calRes) ? calRes : []);
         setFacultyList(Array.isArray(facRes) ? facRes : []);
 
         const activeSemList = activeDepartment?.id
-          ? semRes.filter(s => String(s.department_id) === String(activeDepartment.id))
-          : semRes;
+          ? (semRes || []).filter(s => String(s.department_id) === String(activeDepartment.id))
+          : (semRes || []);
 
         if (activeSemList.length > 0) {
           setSelectedSemesterId(activeSemList[0].id);
           setAcademicYear(activeSemList[0].academic_year || '2026-27');
-        } else if (semRes.length > 0) {
-          setSelectedSemesterId(semRes[0].id);
-          setAcademicYear(semRes[0].academic_year || '2026-27');
+        } else {
+          // Strict multi-tenant isolation: NEVER fall back to another department's semesters!
+          setSelectedSemesterId('');
+          setTimetableEntries([]);
         }
       } catch (err) {
         addToast(err.message || 'Failed to initialize timetable view', 'error');
@@ -239,12 +242,22 @@ export default function AdminTimetable() {
       }
     }
     init();
-  }, []);
+  }, [activeDepartment?.id]);
 
   // Filter semesters by active department if set
   const filteredSemesters = activeDepartment?.id
     ? semesters.filter(s => String(s.department_id) === String(activeDepartment.id))
     : semesters;
+
+  // Filter subjects by active department if set
+  const filteredSubjects = activeDepartment?.id
+    ? subjects.filter(s => String(s.department_id) === String(activeDepartment.id))
+    : subjects;
+
+  // Filter faculty by active department if set
+  const filteredFaculty = activeDepartment?.id
+    ? facultyList.filter(f => String(f.department_id) === String(activeDepartment.id))
+    : facultyList;
 
   // Sync selectedSemesterId if department changes
   useEffect(() => {
@@ -258,17 +271,30 @@ export default function AdminTimetable() {
       setSelectedSemesterId('');
       setTimetableEntries([]);
     }
-  }, [activeDepartment, semesters]);
+  }, [activeDepartment?.id, semesters]);
 
   // Fetch timetable entries whenever selected semester or academic year changes
   const fetchTimetable = async () => {
-    if (!selectedSemesterId) return;
+    if (!selectedSemesterId) {
+      setTimetableEntries([]);
+      return;
+    }
+    // Verify that selectedSemesterId belongs to the active department
+    if (activeDepartment?.id && filteredSemesters.length > 0) {
+      const belongsToDept = filteredSemesters.some(s => String(s.id) === String(selectedSemesterId));
+      if (!belongsToDept) {
+        setSelectedSemesterId(filteredSemesters[0]?.id || '');
+        setTimetableEntries([]);
+        return;
+      }
+    }
     try {
       const entries = await api.getTimetable({
         semester_id: selectedSemesterId,
-        academic_year: academicYear
+        academic_year: academicYear,
+        department_id: activeDepartment?.id
       });
-      setTimetableEntries(entries);
+      setTimetableEntries(entries || []);
     } catch (err) {
       addToast(err.message || 'Failed to fetch timetable entries', 'error');
     }
@@ -341,8 +367,8 @@ export default function AdminTimetable() {
     });
   };
 
-  const currentSemester = semesters.find(s => String(s.id) === String(selectedSemesterId));
-  const semesterSubjects = subjects.filter(s => String(s.semester_id) === String(selectedSemesterId));
+  const currentSemester = filteredSemesters.find(s => String(s.id) === String(selectedSemesterId));
+  const semesterSubjects = filteredSubjects.filter(s => String(s.semester_id) === String(selectedSemesterId));
 
   // Determine Roman Numeral representation of current semester
   const romanSemester = React.useMemo(() => {
@@ -1600,7 +1626,7 @@ export default function AdminTimetable() {
           <button
             type="button"
             onClick={handleClearSemester}
-            disabled={timetableEntries.length === 0}
+            disabled={timetableEntries.length === 0 || filteredSemesters.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 hover:text-rose-600 bg-white hover:bg-rose-50/50 border border-slate-200 hover:border-rose-200 rounded-xl transition shadow-xs cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
             title="Clear current semester entries"
           >
@@ -1612,7 +1638,7 @@ export default function AdminTimetable() {
           <button
             type="button"
             onClick={handleAutoGenerate}
-            disabled={generating}
+            disabled={generating || filteredSemesters.length === 0}
             className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 rounded-xl shadow-sm shadow-orange-500/20 disabled:opacity-50 transition cursor-pointer"
           >
             {generating ? (
@@ -1632,7 +1658,7 @@ export default function AdminTimetable() {
           <button
             type="button"
             onClick={handleExportWord}
-            disabled={exporting || timetableEntries.length === 0}
+            disabled={exporting || timetableEntries.length === 0 || filteredSemesters.length === 0}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
             title="Export Timetable as Word Document (.doc)"
           >
@@ -1646,8 +1672,32 @@ export default function AdminTimetable() {
         </div>
       </section>
 
-      {/* 2. Schedule Header & Metadata Card */}
-      <section className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col gap-4">
+      {/* When No Semesters in Department */}
+      {filteredSemesters.length === 0 ? (
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-12 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto mb-4 border border-orange-100">
+            <GraduationCap className="w-7 h-7" />
+          </div>
+          <h2 className="text-lg font-bold text-slate-800">
+            No Semesters Configured for {activeDepartment?.name || 'this department'}
+          </h2>
+          <p className="text-xs text-slate-500 max-w-md mx-auto mt-1.5 leading-relaxed">
+            This department currently has no semesters configured. To schedule classes and generate timetables, add semesters and subjects in Master Data.
+          </p>
+          {onNavigateToMasterData && (
+            <button
+              type="button"
+              onClick={onNavigateToMasterData}
+              className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-xl shadow-sm shadow-orange-500/20 transition cursor-pointer"
+            >
+              <span>Configure Semesters in Master Data</span>
+            </button>
+          )}
+        </section>
+      ) : (
+        <>
+          {/* 2. Schedule Header & Metadata Card */}
+          <section className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Left: Title and Metadata */}
           <div className="space-y-2">
@@ -1990,6 +2040,8 @@ export default function AdminTimetable() {
           );
         })()}
       </section>
+      </>
+      )}
 
       {/* 4. Faculty External Commitments (Busy Slots) */}
       <section className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
@@ -2045,7 +2097,7 @@ export default function AdminTimetable() {
                     className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-orange-400/40 focus:border-orange-400 transition appearance-none"
                   >
                     <option value="">Select faculty...</option>
-                    {facultyList.filter(f => f.role !== 'admin').sort((a, b) => a.name.localeCompare(b.name)).map(f => (
+                    {filteredFaculty.filter(f => f.role !== 'admin').sort((a, b) => a.name.localeCompare(b.name)).map(f => (
                       <option key={f.id} value={f.id}>{f.name} ({f.faculty_code})</option>
                     ))}
                   </select>

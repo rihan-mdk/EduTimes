@@ -3,7 +3,7 @@ const { sanitizeText, sanitizeCode } = require('../utils/sanitize');
 
 async function getAllSubjects(req, res) {
   try {
-    const { department_id } = req.query;
+    const department_id = req.query.department_id || (req.user?.role !== 'superadmin' ? req.user?.department_id : null);
     let query = `
       SELECT sub.*, 
              sem.number as semester_number, 
