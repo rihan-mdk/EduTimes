@@ -2747,7 +2747,7 @@ export default function AdminTimetable() {
                   width: '28px',
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', fontWeight: 'bold', fontSize: '8.5px', fontFamily: "'Times New Roman', Times, serif', lineHeight: '1.25' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', fontWeight: 'bold', fontSize: '8.5px', fontFamily: "'Times New Roman', Times, serif", lineHeight: '1.25' }}>
                   <span>T</span>
                   <span>E</span>
                   <span>A</span>
@@ -2781,7 +2781,7 @@ export default function AdminTimetable() {
                   width: '28px',
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', fontWeight: 'bold', fontSize: '8.5px', fontFamily: "'Times New Roman', Times, serif', lineHeight: '1.25' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', fontWeight: 'bold', fontSize: '8.5px', fontFamily: "'Times New Roman', Times, serif", lineHeight: '1.25' }}>
                   <span>L</span>
                   <span>U</span>
                   <span>N</span>
