@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast';
 import Modal from '../components/Modal';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { YIT_LOGO_BASE64 } from '../assets/yitLogoBase64.js';
 import {
   Sparkles,
   Download,
@@ -22,7 +23,6 @@ import {
   Layers,
   ChevronDown,
   FileText,
-  FileSpreadsheet,
   UserX,
   Plus,
   CalendarOff,
@@ -1237,53 +1237,54 @@ export default function AdminTimetable() {
     }
   };
 
-  // 7. CSV Export Feature (Strict 10-Column Format, Capitalized Headers, Double-Quoted)
-  const handleExportCSV = () => {
+  // 7. Word Export Feature (Clean professional tabled structure, editable .doc)
+  const handleExportWord = () => {
     try {
       const semNum = currentSemester?.number || '';
       const deptName = activeDepartment?.name || 'Department of Computer Science and Engineering';
       const deptCode = activeDepartment?.code || 'DEPT';
       const semType = ((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN';
+      const classRoom = currentSemester?.class_room || 'LLH-04';
+      const advisor = currentSemester?.class_advisor || '—';
+      const mentors = currentSemester?.mentors || '—';
 
-      // Always pad array to exact 10 columns to guarantee no ragged layout in spreadsheets
-      const padRow = (arr, len = 10) => {
-        const res = [...arr];
-        while (res.length < len) {
-          res.push('');
-        }
-        return res.slice(0, len);
+      const esc = (v) => String(v === null || v === undefined ? '' : v)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      const getSlotText = (day, p, mergeMap) => {
+        const entries = gridMap.get(`${day}_${p}`) || [];
+        if (entries.length === 0) return '';
+        return entries.map(e => {
+          const sub = subjects.find(s => String(s.id) === String(e.subject_id));
+          const fac = resolveFacultyInfo(sub || e);
+          const facStr = fac.code ? ` [${fac.code}]` : '';
+          let typeTag = '';
+          if (mergeMap && mergeMap.has(p)) typeTag = ` ${mergeMap.get(p).tag}`;
+          else if (e.is_lab || e.session_type === 'lab') typeTag = ' [LAB]';
+          else if (e.session_type === 'activity') typeTag = ' [ACT]';
+          return `${esc(e.subject_code || '')}${esc(facStr)}${typeTag}`;
+        }).join(' / ');
       };
 
-      // Ensure all cells are properly double-quoted and internal quotes escaped
-      const escapeCSV = (val) => {
-        const str = val === null || val === undefined ? '' : String(val);
-        return `"${str.replace(/"/g, '""')}"`;
-      };
+      const thStyle = 'border:1px solid black;padding:5px 8px;background:#f2f2f2;font-family:"Times New Roman",serif;font-size:10pt;font-weight:bold;text-align:center;';
+      const tdStyle = 'border:1px solid black;padding:4px 8px;font-family:"Times New Roman",serif;font-size:10pt;text-align:center;';
+      const tdBreakStyle = 'border:1px solid black;padding:4px 3px;font-family:"Times New Roman",serif;font-size:9pt;font-weight:bold;text-align:center;writing-mode:vertical-rl;text-orientation:mixed;letter-spacing:2px;background:#f9f9f9;';
+      const tdDayStyle = 'border:1px solid black;padding:5px 8px;font-family:"Times New Roman",serif;font-size:10pt;font-weight:bold;text-align:center;background:#fafafa;';
 
-      const rows = [];
+      const timeHeaders = [
+        { label: '9:00 AM<br/>To<br/>9:55 AM', key: 1 },
+        { label: '9:55 AM<br/>To<br/>10:50 AM', key: 2 },
+        null, // TEA BREAK
+        { label: '11:10 AM<br/>To<br/>12:05 PM', key: 3 },
+        { label: '12:05 PM<br/>To<br/>1:00 PM', key: 4 },
+        null, // LUNCH BREAK
+        { label: '1:50 PM<br/>To<br/>2:40 PM', key: 5 },
+        { label: '2:40 PM<br/>To<br/>3:30 PM', key: 6 },
+        { label: '3:30 PM<br/>To<br/>4:15 PM', key: 7 },
+      ];
 
-      // Header block (all rows padded to 10 cols)
-      rows.push(padRow([`YENEPOYA INSTITUTE OF TECHNOLOGY - DEPARTMENT OF ${deptName.toUpperCase()}`]));
-      rows.push(padRow([`CLASS: ${romanSemester} SEMESTER | CLASS ROOM: ${currentSemester?.class_room || 'LLH-04'} | W.E.F: ${wefDate} | AY ${academicYear} (${semType} SEMESTER)`]));
-      rows.push(padRow([]));
-
-      // 1. Timetable Matrix Section
-      rows.push(padRow(['TIMETABLE SCHEDULE MATRIX']));
-      rows.push(padRow([]));
-      rows.push(padRow([
-        'DAY',
-        'PERIOD 1 (09:00 AM - 09:55 AM)',
-        'PERIOD 2 (09:55 AM - 10:50 AM)',
-        'TEA BREAK (10:50 AM - 11:10 AM)',
-        'PERIOD 3 (11:10 AM - 12:05 PM)',
-        'PERIOD 4 (12:05 PM - 01:00 PM)',
-        'LUNCH BREAK (01:00 PM - 01:50 PM)',
-        'PERIOD 5 (01:50 PM - 02:40 PM)',
-        'PERIOD 6 (02:40 PM - 03:30 PM)',
-        'PERIOD 7 (03:30 PM - 04:15 PM)'
-      ]));
-
-      // Daily rows
+      // Build timetable rows
+      let dayRowsHtml = '';
       DAYS.forEach((day) => {
         const getMergeableSlot = (p) => {
           const es = gridMap.get(`${day}_${p}`) || [];
@@ -1292,64 +1293,46 @@ export default function AdminTimetable() {
           const sub = subjects.find(s => String(s.id) === String(e.subject_id));
           const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub?.is_lab);
           const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
-          if (isLab || isBlock) {
-            return { ...e, is_lab: isLab, is_block: isBlock };
-          }
+          if (isLab || isBlock) return { ...e, is_lab: isLab, is_block: isBlock };
           return null;
         };
+        const { mergeMap, skipPeriods } = computeLabMerges(getMergeableSlot);
 
-        const { mergeMap } = computeLabMerges(getMergeableSlot);
+        let cells = `<td style="${tdDayStyle}">${esc(day.toUpperCase())}</td>`;
+        const addedMerged = new Set();
 
-        const getSlotText = (p) => {
-          const entries = gridMap.get(`${day}_${p}`) || [];
-          if (entries.length === 0) return '—';
-          return entries.map(e => {
-            const sub = subjects.find(s => String(s.id) === String(e.subject_id));
+        const renderCell = (p) => {
+          if (skipPeriods.has(p)) return '';
+          const mergeInfo = mergeMap.get(p);
+          if (mergeInfo && !addedMerged.has(p)) {
+            addedMerged.add(p);
+            const items = gridMap.get(`${day}_${p}`) || [];
+            const e = items[0];
+            const sub = subjects.find(s => String(s.id) === String(e?.subject_id));
             const fac = resolveFacultyInfo(sub || e);
-            const facStr = fac.code ? ` [${fac.code}]` : (fac.name !== '—' ? ` [${fac.name}]` : '');
-
-            let typeTag = '';
-            if (mergeMap.has(p)) {
-              typeTag = ` ${mergeMap.get(p).tag}`;
-            } else if (e.is_lab || e.session_type === 'lab') {
-              typeTag = ' [LAB]';
-            } else if (e.session_type === 'activity') {
-              typeTag = ' [ACT]';
-            }
-            return `${e.subject_code || ''}${facStr}${typeTag}`;
-          }).join(' / ');
+            const content = `${esc(e?.subject_code || '')}${fac.code ? ` [${esc(fac.code)}]` : ''} ${mergeInfo.tag}`;
+            return `<td colspan="${mergeInfo.span}" style="${tdStyle}">${content}</td>`;
+          }
+          if (mergeInfo) return '';
+          return `<td style="${tdStyle}">${getSlotText(day, p, mergeMap)}</td>`;
         };
 
-        rows.push(padRow([
-          day.toUpperCase(),
-          getSlotText(1),
-          getSlotText(2),
-          'TEA BREAK',
-          getSlotText(3),
-          getSlotText(4),
-          'LUNCH BREAK',
-          getSlotText(5),
-          getSlotText(6),
-          getSlotText(7)
-        ]));
+        cells += renderCell(1);
+        cells += renderCell(2);
+        cells += `<td style="${tdBreakStyle}">TEA BREAK</td>`;
+        cells += renderCell(3);
+        cells += renderCell(4);
+        cells += `<td style="${tdBreakStyle}">LUNCH BREAK</td>`;
+        cells += renderCell(5);
+        cells += renderCell(6);
+        cells += renderCell(7);
+
+        dayRowsHtml += `<tr>${cells}</tr>`;
       });
 
-      rows.push(padRow([]));
-
-      // 2. Faculty Reference Legend Section
-      rows.push(padRow(['FACULTY AND SUBJECT REFERENCE LEGEND']));
-      rows.push(padRow([]));
-      rows.push(padRow([
-        'SUBJECT CODE',
-        'SUBJECT TITLE',
-        'FACULTY IN-CHARGE',
-        'FACULTY CODE',
-        'SESSION TYPE',
-        'WEEKLY HOURS'
-      ]));
-
+      // Build subject legend
       const seen = new Set();
-      const legendRows = timetableEntries
+      const legendEntries = timetableEntries
         .filter(e => {
           if (!e.subject_code || seen.has(e.subject_code)) return false;
           seen.add(e.subject_code);
@@ -1357,53 +1340,132 @@ export default function AdminTimetable() {
         })
         .sort((a, b) => (a.subject_code || '').localeCompare(b.subject_code || ''));
 
-      legendRows.forEach(e => {
+      let legendRowsHtml = '';
+      legendEntries.forEach(e => {
         const sub = subjects.find(s => String(s.id) === String(e.subject_id)) || {};
         const facInfo = resolveFacultyInfo(sub || e);
-        const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub.is_lab);
-        const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
-        const sessionTypeStr = isLab ? 'Laboratory' : isBlock ? 'Block Theory' : (e.session_type === 'activity' ? 'Activity' : 'Theory');
-
-        rows.push(padRow([
-          e.subject_code || sub.code || '',
-          e.subject_name || sub.name || '',
-          facInfo.name,
-          facInfo.code,
-          sessionTypeStr,
-          String(sub.weekly_hours || e.weekly_hours || '')
-        ]));
+        legendRowsHtml += `<tr>
+          <td style="${tdStyle};text-align:left;">${esc(e.subject_code || sub.code || '')}</td>
+          <td style="${tdStyle};text-align:left;">${esc(e.subject_name || sub.name || '')}</td>
+          <td style="${tdStyle};text-align:left;">${esc(facInfo.name)}${facInfo.code ? ` [${esc(facInfo.code)}]` : ''}</td>
+        </tr>`;
       });
+      if (!legendRowsHtml) {
+        legendRowsHtml = `<tr><td style="${tdStyle}" colspan="3">No subjects assigned</td></tr>`;
+      }
 
-      rows.push(padRow([]));
+      const timeHeaderCells = `
+        <th style="${thStyle}">Day / Time</th>
+        <th style="${thStyle}">9:00 AM<br/>To<br/>9:55 AM</th>
+        <th style="${thStyle}">9:55 AM<br/>To<br/>10:50 AM</th>
+        <th style="${thStyle};background:#f9f9f9;width:30px;">TEA<br/>BREAK</th>
+        <th style="${thStyle}">11:10 AM<br/>To<br/>12:05 PM</th>
+        <th style="${thStyle}">12:05 PM<br/>To<br/>1:00 PM</th>
+        <th style="${thStyle};background:#f9f9f9;width:30px;">LUNCH<br/>BREAK</th>
+        <th style="${thStyle}">1:50 PM<br/>To<br/>2:40 PM</th>
+        <th style="${thStyle}">2:40 PM<br/>To<br/>3:30 PM</th>
+        <th style="${thStyle}">3:30 PM<br/>To<br/>4:15 PM</th>
+      `;
 
-      // 3. Class Administration Details Section
-      rows.push(padRow(['CLASS ADMINISTRATION DETAILS']));
-      rows.push(padRow([]));
-      rows.push(padRow(['CLASS ROOM', currentSemester?.class_room || 'LLH-04']));
-      rows.push(padRow(['CLASS ADVISOR', currentSemester?.class_advisor || '—']));
-      rows.push(padRow(['MENTORS', currentSemester?.mentors || '—']));
-      rows.push(padRow([]));
-
-      // Footer
       const todayStr = new Date().toLocaleDateString('en-GB');
-      rows.push(padRow([`Generated on ${todayStr} - Smart Timetable Scheduler`]));
 
-      // Build and trigger download
-      const csvContent = '\uFEFF' + rows.map(r => r.map(escapeCSV).join(',')).join('\r\n');
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const htmlContent = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+<meta charset='utf-8'>
+<title>Timetable - ${esc(deptCode)} Semester ${semNum} AY ${esc(academicYear)}</title>
+<!--[if gte mso 9]>
+<xml><w:WordDocument><w:View>Print</w:View><w:Zoom>90</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml>
+<![endif]-->
+<style>
+  body { font-family: "Times New Roman", serif; font-size: 11pt; margin: 20px; }
+  h1 { font-size: 16pt; font-weight: bold; text-align: center; margin: 0; }
+  h2 { font-size: 12pt; font-weight: bold; text-align: center; margin: 2px 0; }
+  .address { font-size: 10pt; text-align: center; margin: 1px 0; }
+  .header-block { text-align: center; border-bottom: 2px solid black; padding-bottom: 8px; margin-bottom: 10px; }
+  .info-bar { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .info-bar td { border: 1px solid black; padding: 5px 10px; font-size: 10pt; font-weight: bold; text-align: center; }
+  .timetable { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+  .legend { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .admin-bar { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+  .admin-bar td { border: 1px solid black; padding: 6px 10px; font-size: 10pt; }
+  .signatures { width: 100%; margin-top: 20px; }
+  .signatures td { text-align: center; padding-top: 24px; border-top: 1px solid black; font-weight: bold; font-size: 10pt; }
+</style>
+</head>
+<body>
+
+<div class="header-block">
+  <h1>YENEPOYA INSTITUTE OF TECHNOLOGY</h1>
+  <p class="address">NH-13, Thodar, Moodbidri - 574225</p>
+  <h2>Department of ${esc(deptName)}</h2>
+  <h2>TIME TABLE - ${semType} SEMESTER (AY ${esc(academicYear)})</h2>
+</div>
+
+<table class="info-bar">
+  <tr>
+    <td style="width:33%">CLASS: ${esc(romanSemester)} SEMESTER</td>
+    <td style="width:34%">CLASS ROOM: ${esc(classRoom)}</td>
+    <td style="width:33%">W.E.F: ${esc(wefDate)}</td>
+  </tr>
+</table>
+
+<table class="timetable">
+  <thead>
+    <tr>${timeHeaderCells}</tr>
+  </thead>
+  <tbody>
+    ${dayRowsHtml}
+  </tbody>
+</table>
+
+<table class="legend">
+  <thead>
+    <tr>
+      <th style="${thStyle};width:14%;text-align:left;">Subject Code</th>
+      <th style="${thStyle};width:43%;text-align:left;">Subject</th>
+      <th style="${thStyle};width:43%;text-align:left;">Faculty</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${legendRowsHtml}
+  </tbody>
+</table>
+
+<table class="admin-bar">
+  <tr>
+    <td style="width:50%;"><strong>Class Advisor:</strong> ${esc(advisor)}</td>
+    <td style="width:50%;"><strong>Mentors:</strong> ${esc(mentors)}</td>
+  </tr>
+</table>
+
+<table class="signatures">
+  <tr>
+    <td style="width:33%;border-top:1px solid black;">Time Table Coordinator</td>
+    <td style="width:34%;border-top:1px solid black;">Head of the Department</td>
+    <td style="width:33%;border-top:1px solid black;">Principal</td>
+  </tr>
+</table>
+
+<p style="font-size:8pt;color:#888;text-align:right;margin-top:16px;">Generated on ${todayStr}</p>
+
+</body>
+</html>`;
+
+      const blob = new Blob(['\uFEFF' + htmlContent], { type: 'application/msword' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `Timetable_${deptCode}_Sem_${semNum || 'View'}_${academicYear}.csv`);
+      link.setAttribute('download', `Timetable_${deptCode}_Sem_${semNum || 'View'}_${academicYear}.doc`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      addToast('Timetable CSV exported successfully!', 'success');
+      addToast('Timetable exported as Word document successfully!', 'success');
       setExportDropdownOpen(false);
     } catch (err) {
-      addToast('Failed to export CSV: ' + err.message, 'error');
+      addToast('Failed to export Word document: ' + err.message, 'error');
     }
   };
 
@@ -1547,14 +1609,14 @@ export default function AdminTimetable() {
                   type="button"
                   onClick={() => {
                     setExportDropdownOpen(false);
-                    handleExportCSV();
+                    handleExportWord();
                   }}
                   className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                   <div>
-                    <div className="font-bold text-slate-800">Export as CSV</div>
-                    <div className="text-[10px] text-slate-400 font-normal">Spreadsheet / Excel Format (.csv)</div>
+                    <div className="font-bold text-slate-800">Export as Word</div>
+                    <div className="text-[10px] text-slate-400 font-normal">Editable Word Document Format (.doc)</div>
                   </div>
                 </button>
               </div>
@@ -2588,94 +2650,166 @@ export default function AdminTimetable() {
           top: 0,
           width: '1120px',
           backgroundColor: '#ffffff',
-          color: '#0f172a',
-          fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif",
+          fontFamily: "'Times New Roman', Times, serif",
+          border: '1.5px solid #000',
+          padding: '12px 14px',
+          boxSizing: 'border-box',
+          color: '#000',
         }}
-        className="p-5 bg-white text-slate-900 border-2 border-slate-900 box-border"
       >
-        {/* 1. Official Centered Header Block */}
-        <div className="text-center border-b-2 border-slate-900 pb-2 mb-2 relative">
-          <div className="absolute left-1 top-0 border-2 border-slate-900 px-3 py-1 font-serif font-black text-sm tracking-wider">
-            YIT
+        {/* 1. Institutional Header */}
+        <div style={{ position: 'relative', borderBottom: '1.5px solid #000', paddingBottom: '6px', marginBottom: '5px', textAlign: 'center' }}>
+          {/* Logo on the left */}
+          <div style={{ position: 'absolute', left: '4px', top: '0px', width: '82px', height: '82px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img
+              src={YIT_LOGO_BASE64}
+              alt="YIT Logo"
+              style={{ width: '80px', height: '80px', objectFit: 'contain', display: 'block' }}
+            />
           </div>
-          {activeDepartment?.code && (
-            <div className="absolute right-1 top-0 border border-slate-800 bg-slate-50 px-2 py-0.5 font-mono text-[9.5px] font-bold uppercase">
-              DEPT: {activeDepartment.code}
+          {/* Centre text */}
+          <div style={{ paddingLeft: '85px', paddingRight: '85px' }}>
+            <div style={{ fontSize: '19px', fontWeight: 'bold', fontFamily: "'Times New Roman', Times, serif", letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.15 }}>
+              YENEPOYA INSTITUTE OF TECHNOLOGY
             </div>
-          )}
-          <h1 className="text-[17px] font-black tracking-wide uppercase font-serif text-slate-950 leading-tight">
-            Yenepoya Institute of Technology
-          </h1>
-          <p className="text-[9px] text-slate-600 font-medium tracking-normal">
-            NH-13, Thodar, Moodbidri, Mangalore, Karnataka - 574225
-          </p>
-          <p className="text-[12px] font-extrabold text-slate-900 mt-0.5">
-            Department of {activeDepartment?.name || 'Computer Science and Engineering'}
-          </p>
-          <div className="text-[10px] font-extrabold uppercase tracking-wider text-slate-800 mt-0.5">
-            AY {academicYear} • {((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN'} SEMESTER
+            <div style={{ fontSize: '10.5px', marginTop: '2px', fontFamily: "'Times New Roman', Times, serif" }}>
+              NH-13, Thodar, Moodbidri - 574225
+            </div>
+            <div style={{ fontSize: '12.5px', fontWeight: 'bold', marginTop: '2px', fontFamily: "'Times New Roman', Times, serif" }}>
+              Department of {activeDepartment?.name || 'Artificial Intelligence and Machine Learning'}
+            </div>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', marginTop: '2px', textTransform: 'uppercase', fontFamily: "'Times New Roman', Times, serif", letterSpacing: '0.03em' }}>
+              TIME TABLE - {((currentSemester?.number || 1) % 2 === 1) ? 'ODD' : 'EVEN'} SEMESTER (AY {academicYear})
+            </div>
           </div>
         </div>
 
-        {/* 2. Class-Info Bar */}
-        <div className="border border-slate-800 text-[10px] font-bold uppercase mb-2 text-center py-1 bg-slate-50 flex items-center justify-center divide-x divide-slate-800">
-          <div className="px-5">
-            <span className="text-slate-600 font-semibold mr-1">CLASS:</span>
-            <span className="text-slate-950 font-black">{romanSemester} SEMESTER</span>
-          </div>
-          <div className="px-5">
-            <span className="text-slate-600 font-semibold mr-1">CLASS ROOM:</span>
-            <span className="text-slate-950 font-black">{currentSemester?.class_room || 'LLH-04'}</span>
-          </div>
-          <div className="px-5">
-            <span className="text-slate-600 font-semibold mr-1">W.E.F:</span>
-            <span className="text-slate-950 font-black">{wefDate}</span>
-          </div>
-        </div>
-
-        {/* 3. Official Timetable Grid */}
-        <table className="w-full border-collapse border border-slate-800 text-center text-xs mb-2.5 table-fixed">
-          <thead className="bg-slate-100">
-            <tr className="text-slate-900 font-bold text-[9px] uppercase">
-              <th className="border border-slate-800 py-1 px-1 w-[80px]">DAY \ PERIOD</th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 1</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">09:00 - 09:55</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 2</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">09:55 - 10:50</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[24px] text-[7.5px] bg-slate-200/80 text-slate-800 font-extrabold">
-                TEA
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 3</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">11:10 - 12:05</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 4</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">12:05 - 13:00</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-0.5 w-[24px] text-[7.5px] bg-slate-200/80 text-slate-800 font-extrabold">
-                LUNCH
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 5</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">13:50 - 14:40</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 6</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">14:40 - 15:30</div>
-              </th>
-              <th className="border border-slate-800 py-1 px-1">
-                <div>PERIOD 7</div>
-                <div className="text-[7.5px] font-mono font-normal text-slate-600">15:30 - 16:15</div>
-              </th>
-            </tr>
-          </thead>
+        {/* 2. Class Info Bar */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4px' }}>
           <tbody>
-            {DAYS.map((day, dIdx) => {
+            <tr>
+              <td style={{ border: '1.5px solid #000', padding: '4px 8px', fontWeight: 'bold', fontSize: '10.5px', textAlign: 'left', width: '33%', fontFamily: "'Times New Roman', Times, serif" }}>
+                CLASS: {romanSemester} SEMESTER
+              </td>
+              <td style={{ border: '1.5px solid #000', padding: '4px 8px', fontWeight: 'bold', fontSize: '10.5px', textAlign: 'center', width: '34%', fontFamily: "'Times New Roman', Times, serif" }}>
+                CLASS ROOM: {currentSemester?.class_room || 'LLH-01'}
+              </td>
+              <td style={{ border: '1.5px solid #000', padding: '4px 8px', fontWeight: 'bold', fontSize: '10.5px', textAlign: 'right', width: '33%', fontFamily: "'Times New Roman', Times, serif" }}>
+                W.E.F: {wefDate}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* 3. Main Timetable Grid (All rows in single tbody for perfect rowSpan across all 7 rows) */}
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4px', tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: '100px' }} />
+            <col />
+            <col />
+            <col style={{ width: '28px' }} />
+            <col />
+            <col />
+            <col style={{ width: '28px' }} />
+            <col />
+            <col />
+            <col />
+          </colgroup>
+          <tbody>
+            {/* Row 0: Time Header Row */}
+            <tr style={{ height: '42px' }}>
+              <th style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', fontFamily: "'Times New Roman', Times, serif", fontSize: '9.5px', verticalAlign: 'middle', backgroundColor: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                  <span style={{ fontWeight: 'bold' }}>Day</span>
+                  <span style={{ fontWeight: 'bold' }}>Time &rarr;</span>
+                </div>
+                <div style={{ fontSize: '9px', lineHeight: 1 }}>&darr;</div>
+              </th>
+              {[
+                { top: '9:00AM', to: 'To', bot: '09:55PM' },
+                { top: '9:55AM', to: 'To', bot: '10:50AM' },
+              ].map((t, i) => (
+                <th key={i} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', fontFamily: "'Times New Roman', Times, serif", fontSize: '9px', fontWeight: 'bold', verticalAlign: 'middle' }}>
+                  <div>{t.top}</div>
+                  <div style={{ fontSize: '8px', fontWeight: 'normal' }}>{t.to}</div>
+                  <div>{t.bot}</div>
+                </th>
+              ))}
+              {/* Tea Break Column: Spans this header row + all 6 weekday rows = rowSpan 7 */}
+              <td
+                rowSpan={7}
+                style={{
+                  border: '1px solid #000',
+                  padding: '2px 0',
+                  textAlign: 'center',
+                  verticalAlign: 'middle',
+                  backgroundColor: '#fff',
+                  width: '28px',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', fontWeight: 'bold', fontSize: '8.5px', fontFamily: "'Times New Roman', Times, serif', lineHeight: '1.25' }}>
+                  <span>T</span>
+                  <span>E</span>
+                  <span>A</span>
+                  <div style={{ height: '14px' }} />
+                  <span>B</span>
+                  <span>R</span>
+                  <span>E</span>
+                  <span>A</span>
+                  <span>K</span>
+                </div>
+              </td>
+              {[
+                { top: '11:10AM', to: 'To', bot: '12:05PM' },
+                { top: '12:05PM', to: 'To', bot: '01:00PM' },
+              ].map((t, i) => (
+                <th key={i} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', fontFamily: "'Times New Roman', Times, serif", fontSize: '9px', fontWeight: 'bold', verticalAlign: 'middle' }}>
+                  <div>{t.top}</div>
+                  <div style={{ fontSize: '8px', fontWeight: 'normal' }}>{t.to}</div>
+                  <div>{t.bot}</div>
+                </th>
+              ))}
+              {/* Lunch Break Column: Spans this header row + all 6 weekday rows = rowSpan 7 */}
+              <td
+                rowSpan={7}
+                style={{
+                  border: '1px solid #000',
+                  padding: '2px 0',
+                  textAlign: 'center',
+                  verticalAlign: 'middle',
+                  backgroundColor: '#fff',
+                  width: '28px',
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', fontWeight: 'bold', fontSize: '8.5px', fontFamily: "'Times New Roman', Times, serif', lineHeight: '1.25' }}>
+                  <span>L</span>
+                  <span>U</span>
+                  <span>N</span>
+                  <span>C</span>
+                  <span>H</span>
+                  <div style={{ height: '14px' }} />
+                  <span>B</span>
+                  <span>R</span>
+                  <span>E</span>
+                  <span>A</span>
+                  <span>K</span>
+                </div>
+              </td>
+              {[
+                { top: '01:50PM', to: 'To', bot: '02:40PM' },
+                { top: '02:40PM', to: 'To', bot: '03:30PM' },
+                { top: '03:30PM', to: 'To', bot: '4:15PM' },
+              ].map((t, i) => (
+                <th key={i} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', fontFamily: "'Times New Roman', Times, serif", fontSize: '9px', fontWeight: 'bold', verticalAlign: 'middle' }}>
+                  <div>{t.top}</div>
+                  <div style={{ fontSize: '8px', fontWeight: 'normal' }}>{t.to}</div>
+                  <div>{t.bot}</div>
+                </th>
+              ))}
+            </tr>
+
+            {/* Rows 1-6: Weekdays */}
+            {DAYS.map((day) => {
               const getMergeableSlot = (p) => {
                 const es = gridMap.get(`${day}_${p}`) || [];
                 if (es.length !== 1) return null;
@@ -2683,52 +2817,39 @@ export default function AdminTimetable() {
                 const sub = subjects.find(s => String(s.id) === String(e.subject_id));
                 const isLab = Boolean(e.is_lab || e.session_type === 'lab' || sub?.is_lab);
                 const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || e.session_type === 'block');
-                if (isLab || isBlock) {
-                  return { ...e, is_lab: isLab, is_block: isBlock };
-                }
+                if (isLab || isBlock) return { ...e, is_lab: isLab, is_block: isBlock };
                 return null;
               };
 
               const { mergeMap, skipPeriods } = computeLabMerges(getMergeableSlot);
 
               const renderPrintCell = (items) => {
-                if (!items || items.length === 0) return <span className="text-slate-300 font-mono text-[10px]">—</span>;
+                if (!items || items.length === 0) return null;
                 if (items.length === 1) {
                   const it = items[0];
                   const sub = subjects.find(s => String(s.id) === String(it.subject_id));
                   const fac = resolveFacultyInfo(sub || it);
                   const isLab = Boolean(it.is_lab || it.session_type === 'lab' || sub?.is_lab);
                   const isBlock = Boolean((sub && (Number(sub.block_session_count) > 0 || Number(sub.block_session_hours) > 1)) || it.session_type === 'block');
-
                   return (
-                    <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
-                      <span className="font-mono font-bold text-[11px] text-slate-950 tracking-tight">{it.subject_code}</span>
-                      {fac.code && (
-                        <span className="text-[7.5px] font-mono text-slate-600">[{fac.code}]</span>
-                      )}
-                      {isLab ? (
-                        <span className="text-[7px] font-mono font-bold text-slate-700 mt-0.5">[LAB]</span>
-                      ) : isBlock ? (
-                        <span className="text-[7px] font-mono font-bold text-slate-700 mt-0.5">[BLOCK]</span>
-                      ) : it.session_type === 'activity' ? (
-                        <span className="text-[7px] font-mono font-semibold text-slate-600 mt-0.5">[ACT]</span>
-                      ) : null}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.25 }}>
+                      <span style={{ fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '10.5px' }}>{it.subject_code}</span>
+                      {fac.code && <span style={{ fontFamily: 'monospace', fontSize: '8px', color: '#333' }}>[{fac.code}]</span>}
+                      {isLab && <span style={{ fontSize: '7px', fontWeight: 'bold' }}>[LAB]</span>}
+                      {!isLab && isBlock && <span style={{ fontSize: '7px', fontWeight: 'bold' }}>[BLOCK]</span>}
+                      {!isLab && !isBlock && it.session_type === 'activity' && <span style={{ fontSize: '7px' }}>[ACT]</span>}
                     </div>
                   );
                 }
-
-                // Parallel activities (NSS/PE): stacked slots within the cell, not overlapping, with subject code & faculty code
                 return (
-                  <div className="h-full flex flex-col items-center justify-center gap-0.5 py-0.5 leading-tight">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1px' }}>
                     {items.map((it, idx) => {
                       const sub = subjects.find(s => String(s.id) === String(it.subject_id));
                       const fac = resolveFacultyInfo(sub || it);
                       return (
-                        <div key={idx} className={idx > 0 ? "border-t border-slate-300 pt-0.5 w-full text-center" : "w-full text-center"}>
-                          <span className="font-mono font-bold text-[9px] text-slate-950">{it.subject_code}</span>
-                          {fac.code && (
-                            <span className="text-[7.5px] font-mono font-semibold text-slate-600 ml-1">[{fac.code}]</span>
-                          )}
+                        <div key={idx} style={idx > 0 ? { borderTop: '1px solid #ccc', paddingTop: '1px', textAlign: 'center', width: '100%' } : { textAlign: 'center', width: '100%' }}>
+                          <span style={{ fontWeight: 'bold', fontSize: '9px' }}>{it.subject_code}</span>
+                          {fac.code && <span style={{ fontFamily: 'monospace', fontSize: '7.5px', color: '#555', marginLeft: '2px' }}>[{fac.code}]</span>}
                         </div>
                       );
                     })}
@@ -2745,83 +2866,36 @@ export default function AdminTimetable() {
                   const entry = items[0];
                   const sub = subjects.find(s => String(s.id) === String(entry?.subject_id));
                   const fac = resolveFacultyInfo(sub || entry);
-
                   return (
-                    <td key={p} colSpan={mergeInfo.span} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 text-center align-middle">
-                      <div className="h-full flex flex-col items-center justify-center py-0.5 leading-tight">
-                        <span className="font-mono font-bold text-[11.5px] text-slate-950 tracking-tight">{entry?.subject_code}</span>
-                        {fac.code && (
-                          <span className="text-[8px] font-mono font-semibold text-slate-600">[{fac.code}]</span>
-                        )}
-                        <span className="text-[8px] font-mono font-bold text-slate-800 uppercase tracking-wide mt-0.5">
-                          {mergeInfo.tag}
-                        </span>
-                        <span className="text-[7.5px] font-mono text-slate-500">
-                          {mergeInfo.timeRange}
-                        </span>
+                    <td key={p} colSpan={mergeInfo.span} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#fff' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1.25 }}>
+                        <span style={{ fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '10.5px' }}>{entry?.subject_code}</span>
+                        {fac.code && <span style={{ fontFamily: 'monospace', fontSize: '8px', color: '#333' }}>[{fac.code}]</span>}
+                        <span style={{ fontSize: '7.5px', fontWeight: 'bold', marginTop: '1px' }}>{mergeInfo.tag}</span>
+                        <span style={{ fontSize: '7px', color: '#555' }}>{mergeInfo.timeRange}</span>
                       </div>
                     </td>
                   );
                 }
 
                 return (
-                  <td key={p} style={{ backgroundColor: '#ffffff' }} className="border border-slate-800 p-1 align-middle">
+                  <td key={p} style={{ border: '1px solid #000', padding: '2px', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#fff' }}>
                     {renderPrintCell(items)}
                   </td>
                 );
               };
 
               return (
-                <tr key={day} className="h-9">
-                  <td className="border border-slate-800 bg-slate-100/70 font-bold text-slate-950 text-[10px] uppercase tracking-wider py-0.5 px-1 align-middle">
-                    {day}
+                <tr key={day} style={{ height: '36px' }}>
+                  <td style={{ border: '1px solid #000', padding: '2px 4px', fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '10px', textAlign: 'center', verticalAlign: 'middle', backgroundColor: '#fff' }}>
+                    {day.toUpperCase()}
                   </td>
-
-                  {/* Period 1 & 2 */}
                   {renderPrintPeriodTd(1)}
                   {renderPrintPeriodTd(2)}
-
-                  {/* Tea Break: spanning all 6 rows */}
-                  {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-slate-100 text-center py-1 px-0.5 w-[24px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-bold text-[7.5px] tracking-widest text-slate-700 leading-tight">
-                        <span>T</span>
-                        <span>E</span>
-                        <span>A</span>
-                        <span className="my-0.5 text-[5px] text-slate-500">•</span>
-                        <span>B</span>
-                        <span>R</span>
-                        <span>E</span>
-                        <span>A</span>
-                        <span>K</span>
-                      </div>
-                    </td>
-                  )}
-
-                  {/* Period 3 & 4 */}
+                  {/* Tea Break is spanned from row 0 */}
                   {renderPrintPeriodTd(3)}
                   {renderPrintPeriodTd(4)}
-
-                  {/* Lunch Break: spanning all 6 rows */}
-                  {dIdx === 0 && (
-                    <td rowSpan={6} className="border border-slate-800 bg-slate-100 text-center py-1 px-0.5 w-[24px] align-middle">
-                      <div className="flex flex-col items-center justify-center font-bold text-[7.5px] tracking-widest text-slate-700 leading-tight">
-                        <span>L</span>
-                        <span>U</span>
-                        <span>N</span>
-                        <span>C</span>
-                        <span>H</span>
-                        <span className="my-0.5 text-[5px] text-slate-500">•</span>
-                        <span>B</span>
-                        <span>R</span>
-                        <span>E</span>
-                        <span>A</span>
-                        <span>K</span>
-                      </div>
-                    </td>
-                  )}
-
-                  {/* Period 5, 6, 7 */}
+                  {/* Lunch Break is spanned from row 0 */}
                   {renderPrintPeriodTd(5)}
                   {renderPrintPeriodTd(6)}
                   {renderPrintPeriodTd(7)}
@@ -2831,7 +2905,7 @@ export default function AdminTimetable() {
           </tbody>
         </table>
 
-        {/* 4. Faculty Legend Table (2-Column Format Sorted by Subject Code Ascending) */}
+        {/* 4. Subject Legend Table — 3 columns: Subject Code | Subject | Faculty */}
         {(() => {
           const seen = new Set();
           const printLegend = timetableEntries
@@ -2842,78 +2916,86 @@ export default function AdminTimetable() {
             })
             .sort((a, b) => (a.subject_code || '').localeCompare(b.subject_code || ''));
 
-          const advisor = currentSemester?.class_advisor || '—';
-          const mentors = currentSemester?.mentors || '—';
+          const advisor = currentSemester?.class_advisor || '';
+          const mentors = currentSemester?.mentors || '';
+
+          const cellBase = { border: '1px solid #000', padding: '3px 8px', fontFamily: "'Times New Roman', Times, serif", fontSize: '9.5px', verticalAlign: 'middle', height: '22px' };
+          const headBase = { ...cellBase, fontWeight: 'bold', textAlign: 'center', backgroundColor: '#fff', fontSize: '10px' };
+
+          // Ensure minimum 4 rows in subject table for visual balance matching reference
+          const displayRows = [...printLegend];
+          while (displayRows.length < 4) {
+            displayRows.push(null);
+          }
 
           return (
-            <div className="border border-slate-800 mb-2.5 text-xs">
-              <table className="w-full border-collapse text-left">
+            <>
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4px' }}>
                 <thead>
-                  <tr className="bg-slate-100 text-slate-900 font-bold text-[9px] uppercase border-b border-slate-800">
-                    <th className="border-r border-slate-800 px-3 py-1">Subject Code & Title</th>
-                    <th className="px-3 py-1 w-72">Faculty In-Charge</th>
+                  <tr>
+                    <th style={{ ...headBase, width: '14%' }}>Subject Code</th>
+                    <th style={{ ...headBase, width: '43%' }}>Subject</th>
+                    <th style={{ ...headBase, width: '43%' }}>Faculty</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {printLegend.map((it, idx) => {
+                  {displayRows.map((it, idx) => {
+                    if (!it) {
+                      return (
+                        <tr key={`empty_${idx}`}>
+                          <td style={cellBase}>&nbsp;</td>
+                          <td style={cellBase}>&nbsp;</td>
+                          <td style={cellBase}>&nbsp;</td>
+                        </tr>
+                      );
+                    }
                     const sub = subjects.find(s => String(s.id) === String(it.subject_id));
                     const facInfo = resolveFacultyInfo(sub || it);
                     return (
-                      <tr key={it.subject_code || idx} className="border-b border-slate-200 even:bg-slate-50/50 text-[9.5px]">
-                        <td className="border-r border-slate-800 px-3 py-0.5 text-slate-900">
-                          <span className="font-mono font-bold text-slate-950 mr-2">{it.subject_code}</span>
-                          <span className="text-slate-800 font-medium">{it.subject_name || sub?.name}</span>
+                      <tr key={it.subject_code || idx}>
+                        <td style={{ ...cellBase, fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '9.5px', textAlign: 'center' }}>
+                          {it.subject_code}
                         </td>
-                        <td className="px-3 py-0.5 text-slate-900 font-medium">
-                          <span>{facInfo.name}</span>
-                          {facInfo.code && (
-                            <span className="font-mono text-[8.5px] text-slate-600 font-normal ml-1.5">[{facInfo.code}]</span>
-                          )}
+                        <td style={{ ...cellBase, textAlign: 'left' }}>
+                          {it.subject_name || sub?.name || ''}
+                        </td>
+                        <td style={{ ...cellBase, textAlign: 'left' }}>
+                          {facInfo.name}
+                          {facInfo.code && <span style={{ fontSize: '8.5px', color: '#444', marginLeft: '6px', fontFamily: 'monospace' }}>[{facInfo.code}]</span>}
                         </td>
                       </tr>
                     );
                   })}
-                  {/* Advisor and Mentors footer row */}
-                  <tr className="bg-slate-100/70 border-t border-slate-800 font-semibold text-[9.5px] text-slate-900">
-                    <td className="border-r border-slate-800 px-3 py-1">
-                      <strong className="text-slate-950 font-bold">Class Advisor:</strong>{' '}
-                      <span className="text-slate-800 font-medium">{advisor}</span>
+                </tbody>
+              </table>
+
+              {/* 5. Class Advisor & Mentors */}
+              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '10px' }}>
+                <tbody>
+                  <tr>
+                    <td style={{ border: '1px solid #000', padding: '4px 10px', fontFamily: "'Times New Roman', Times, serif", fontSize: '10px', width: '50%' }}>
+                      <strong>Class Advisor:</strong> {advisor}
                     </td>
-                    <td className="px-3 py-1">
-                      <strong className="text-slate-950 font-bold">Mentors:</strong>{' '}
-                      <span className="text-slate-800 font-medium">{mentors}</span>
+                    <td style={{ border: '1px solid #000', padding: '4px 10px', fontFamily: "'Times New Roman', Times, serif", fontSize: '10px', width: '50%' }}>
+                      <strong>Mentors:</strong> {mentors}
                     </td>
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </>
           );
         })()}
 
-        {/* 5. Institutional Signatures Footer */}
-        <div className="grid grid-cols-3 text-center text-[10.5px] font-bold pt-1.5">
-          <div>
-            <div className="h-4" />
-            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              Time Table Coordinator
-            </div>
-          </div>
-          <div>
-            <div className="h-4" />
-            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              Head of Department
-            </div>
-          </div>
-          <div>
-            <div className="h-4" />
-            <div className="border-t border-slate-800 pt-0.5 inline-block min-w-[170px] text-slate-900">
-              <div>Principal</div>
-              <div className="text-[7px] font-normal text-slate-600 uppercase mt-0.5 leading-tight">
-                Yenepoya Institute of Technology<br />
-                N.H.13, Thodar, Moodbidri - 574225
+        {/* 6. Signature Section */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', paddingTop: '16px' }}>
+          {['Time Table Coordinator', 'Head of the Department', 'Principal'].map((label) => (
+            <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ height: '24px' }} />
+              <div style={{ borderTop: '1px solid #000', minWidth: '180px', paddingTop: '3px', fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '10px' }}>
+                {label}
               </div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </div>
