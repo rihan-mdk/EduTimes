@@ -139,7 +139,7 @@ export const api = {
   // createFacultyRaw: returns { status, data } without throwing, so callers can handle 409 conflicts
   createFacultyRaw: async (data) => {
     const token = localStorage.getItem('yensync_token');
-    const response = await fetch('/api/faculty', {
+    const response = await fetch(`${API_BASE}/faculty`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
