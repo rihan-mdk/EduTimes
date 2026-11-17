@@ -1628,59 +1628,21 @@ export default function AdminTimetable() {
             )}
           </button>
 
-          {/* Export Dropdown */}
-          <div className="relative" ref={exportDropdownRef}>
-            <button
-              type="button"
-              onClick={() => setExportDropdownOpen(prev => !prev)}
-              disabled={exporting || timetableEntries.length === 0}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
-            >
-              {exporting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
-              ) : (
-                <Download className="w-3.5 h-3.5 text-slate-500" />
-              )}
-              <span>Export</span>
-              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${exportDropdownOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {exportDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 animate-in fade-in zoom-in-95 duration-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExportDropdownOpen(false);
-                    handleExportPDF();
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
-                >
-                  <FileText className="w-4 h-4 text-rose-500 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-800">Export as PDF</div>
-                    <div className="text-[10px] text-slate-400 font-normal">Official Institutional Format (.pdf)</div>
-                  </div>
-                </button>
-
-                <div className="border-t border-slate-100 my-0.5" />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExportDropdownOpen(false);
-                    handleExportWord();
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors text-left cursor-pointer"
-                >
-                  <FileText className="w-4 h-4 text-blue-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-slate-800">Export as Word</div>
-                    <div className="text-[10px] text-slate-400 font-normal">Editable Word Document Format (.doc)</div>
-                  </div>
-                </button>
-              </div>
+          {/* Export as Word Button */}
+          <button
+            type="button"
+            onClick={handleExportWord}
+            disabled={exporting || timetableEntries.length === 0}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
+            title="Export Timetable as Word Document (.doc)"
+          >
+            {exporting ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-500" />
+            ) : (
+              <Download className="w-3.5 h-3.5 text-slate-500" />
             )}
-          </div>
+            <span>Export as Word</span>
+          </button>
         </div>
       </section>
 
