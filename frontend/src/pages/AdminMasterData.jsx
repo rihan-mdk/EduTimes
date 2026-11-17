@@ -19,8 +19,10 @@ import {
   UserCheck,
   Sparkles,
   Eye,
-  EyeOff
+  EyeOff,
+  FileSpreadsheet
 } from 'lucide-react';
+import AdminAllotmentManager from '../components/AdminAllotmentManager';
 
 export default function AdminMasterData() {
   const { user, activeDepartment } = useAuth();
@@ -330,6 +332,14 @@ export default function AdminMasterData() {
             <Clock className="w-4 h-4" />
             Timeslots ({timeslots.length})
           </button>
+          <button
+            onClick={() => setActiveSubTab('allotment')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg transition-colors ${activeSubTab === 'allotment' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+              }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Course Allotment
+          </button>
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -357,13 +367,15 @@ export default function AdminMasterData() {
             </button>
           )}
 
-          <button
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
-          >
-            <Plus className="w-4 h-4" />
-            Add New {activeSubTab.slice(0, -1)}
-          </button>
+          {activeSubTab !== 'allotment' && (
+            <button
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg shadow-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add New {activeSubTab.slice(0, -1)}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1090,6 +1102,16 @@ export default function AdminMasterData() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════
+              ALLOTMENT TAB: Subject Allotment & Course Preferences
+              ═══════════════════════════════════════════════════════════════ */}
+          {activeSubTab === 'allotment' && (
+            <AdminAllotmentManager
+              facultyList={filteredFaculty}
+              semestersList={sortedSemesters}
+            />
           )}
         </div>
       )}

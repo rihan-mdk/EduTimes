@@ -73,6 +73,7 @@ function initMemoryDb() {
   const migration9 = fs.readFileSync(path.join(__dirname, '../../migrations/009_faculty_busy_slots.sql'), 'utf8');
   const migration10 = fs.readFileSync(path.join(__dirname, '../../migrations/010_enable_rls.sql'), 'utf8');
   const migration11 = fs.readFileSync(path.join(__dirname, '../../migrations/011_performance_indexes.sql'), 'utf8');
+  const migration12 = fs.readFileSync(path.join(__dirname, '../../migrations/012_subject_allotment_system.sql'), 'utf8');
 
   try {
     memDb.public.none(migration1);
@@ -86,7 +87,20 @@ function initMemoryDb() {
     try { memDb.public.none(migration9); } catch (e) { /* table or index already exists */ }
     try { memDb.public.none(migration10); } catch (e) { /* rls noop in pg-mem */ }
     try { memDb.public.none(migration11); } catch (e) { /* index already exists or not supported in mem */ }
-    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-011!');
+    try {
+      // Execute DDL parts of migration 12 (tables and indexes)
+      const ddlParts = migration12.split('DO $$')[0];
+      memDb.public.none(ddlParts);
+      // Insert default seed session in memDb
+      memDb.public.none(`
+        INSERT INTO subject_allotment_session (id, department_id, academic_year, semester_type, title, status, instructions)
+        VALUES (1, 1, '2026-27', 'ODD', 'Subject Allotment / Course Preferences', 'open', 'Please select your 1st and 2nd choices for Theory & Lab courses.')
+        ON CONFLICT DO NOTHING;
+      `);
+    } catch (e) {
+      console.warn('Memory DB migration 12 note:', e.message);
+    }
+    console.log('✅ In-memory database initialized with all tables, seed data, and migrations 001-012!');
   } catch (err) {
     console.warn('Memory DB init note:', err.message);
   }

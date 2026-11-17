@@ -12,8 +12,10 @@ import {
   Coffee, 
   Utensils,
   UserCheck,
-  CalendarOff
+  CalendarOff,
+  FileSpreadsheet
 } from 'lucide-react';
+import FacultyPreferenceSheet from '../components/FacultyPreferenceSheet';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const PERIOD_TIMES = {
@@ -86,6 +88,7 @@ export default function FacultyDashboard() {
   const [timetableEntries, setTimetableEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busySlots, setBusySlots] = useState([]);
+  const [activeTab, setActiveTab] = useState('schedule'); // 'schedule' | 'preferences'
 
   // Current real-time clock & day calculation
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -174,8 +177,40 @@ export default function FacultyDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner: Today's Status & Next/Current Class Highlight */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* Top Tab Switcher */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('schedule')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+            activeTab === 'schedule'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <CalendarIcon className="w-4 h-4" />
+          <span>My Weekly Schedule</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('preferences')}
+          className={`flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+            activeTab === 'preferences'
+              ? 'bg-slate-900 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          <span>Course Preferences & Allotment</span>
+        </button>
+      </div>
+
+      {activeTab === 'preferences' ? (
+        <FacultyPreferenceSheet />
+      ) : (
+        <>
+          {/* Top Banner: Today's Status & Next/Current Class Highlight */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Welcome & Date Card */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
           <div>
@@ -459,6 +494,8 @@ export default function FacultyDashboard() {
           </div>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }

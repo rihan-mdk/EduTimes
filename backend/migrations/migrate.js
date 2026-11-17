@@ -40,7 +40,8 @@ async function runMigrations() {
       '008_make_faculty_id_nullable_for_generic_activities.sql',
       '009_faculty_busy_slots.sql',
       '010_enable_rls.sql',
-      '011_performance_indexes.sql'
+      '011_performance_indexes.sql',
+      '012_subject_allotment_system.sql'
     ];
 
     await client.query(`

@@ -208,4 +208,20 @@ export const api = {
   },
   createFacultyBusySlots: (data) => apiRequest('/faculty-busy-slots', { method: 'POST', body: data }),
   deleteFacultyBusySlot: (id) => apiRequest(`/faculty-busy-slots/${id}`, { method: 'DELETE' }),
+
+  // Subject Allotment & Course Preferences
+  getAllotmentSessions: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest(`/allotment/sessions${qs ? `?${qs}` : ''}`);
+  },
+  createAllotmentSession: (data) => apiRequest('/allotment/sessions', { method: 'POST', body: data }),
+  getAllotmentSessionDetails: (id) => apiRequest(`/allotment/sessions/${id}`),
+  updateAllotmentSessionStatus: (id, data) => apiRequest(`/allotment/sessions/${id}/status`, { method: 'PATCH', body: data }),
+  syncAllotmentToMasterData: (id) => apiRequest(`/allotment/sessions/${id}/sync`, { method: 'POST' }),
+  addAllotmentCourse: (data) => apiRequest('/allotment/courses', { method: 'POST', body: data }),
+  updateAllotmentCourse: (id, data) => apiRequest(`/allotment/courses/${id}`, { method: 'PUT', body: data }),
+  deleteAllotmentCourse: (id) => apiRequest(`/allotment/courses/${id}`, { method: 'DELETE' }),
+  allotCourseFaculty: (course_id, data) => apiRequest(`/allotment/courses/${course_id}/allot`, { method: 'POST', body: data }),
+  getFacultyAllotmentSheet: () => apiRequest('/allotment/faculty/sheet'),
+  submitFacultyCoursePreferences: (data) => apiRequest('/allotment/faculty/preferences', { method: 'POST', body: data }),
 };
