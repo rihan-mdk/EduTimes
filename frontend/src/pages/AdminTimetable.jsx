@@ -1505,28 +1505,7 @@ export default function AdminTimetable() {
   </tr>
 </table>
 
-<!-- 3. Official Signatures Section -->
-<table cellspacing="0" cellpadding="0" style="width:100%;margin-top:32pt;border-collapse:collapse;border:none;">
-  <tr style="page-break-inside:avoid;">
-    <td style="width:33%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
-      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;">
-        Time Table Coordinator
-      </div>
-    </td>
-    <td style="width:34%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
-      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;">
-        Head of the Department
-      </div>
-    </td>
-    <td style="width:33%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
-      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;">
-        Principal
-      </div>
-    </td>
-  </tr>
-</table>
-
-<p style="font-size:7pt;color:#777777;text-align:right;margin-top:8pt;margin-bottom:0;font-family:'Times New Roman',serif;">Generated on ${todayStr}</p>
+<p style="font-size:7pt;color:#777777;text-align:right;margin-top:10pt;margin-bottom:0;font-family:'Times New Roman',serif;">Generated on ${todayStr}</p>
 
 </div>
 </body>
