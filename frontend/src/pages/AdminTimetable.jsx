@@ -1506,7 +1506,7 @@ export default function AdminTimetable() {
 </table>
 
 <!-- 3. Official Signatures Section -->
-<table cellspacing="0" cellpadding="0" style="width:100%;margin-top:18pt;border-collapse:collapse;border:none;">
+<table cellspacing="0" cellpadding="0" style="width:100%;margin-top:32pt;border-collapse:collapse;border:none;">
   <tr style="page-break-inside:avoid;">
     <td style="width:33%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
       <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;">
@@ -1521,11 +1521,6 @@ export default function AdminTimetable() {
     <td style="width:33%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
       <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;">
         Principal
-      </div>
-      <div style="font-size:7pt;font-family:'Times New Roman',serif;text-transform:uppercase;margin-top:2pt;line-height:1.2;color:#333333;">
-        Yenepoya Institute of Technology<br/>
-        N.H.13, Thodar, Mijar - 574 225<br/>
-        Mangalore Taluk, D.K.
       </div>
     </td>
   </tr>
@@ -3072,19 +3067,12 @@ export default function AdminTimetable() {
         })()}
 
         {/* 6. Signature Section */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', paddingTop: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', paddingTop: '28px' }}>
           {['Time Table Coordinator', 'Head of the Department', 'Principal'].map((label) => (
             <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ height: '24px' }} />
+              <div style={{ height: '28px' }} />
               <div style={{ borderTop: '1px solid #000', minWidth: '180px', paddingTop: '3px', fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '10px' }}>
                 <div>{label}</div>
-                {label === 'Principal' && (
-                  <div style={{ fontSize: '7.5px', fontFamily: "'Times New Roman', Times, serif", textTransform: 'uppercase', marginTop: '2px', lineHeight: 1.2, color: '#333333', fontWeight: 'normal' }}>
-                    Yenepoya Institute of Technology<br />
-                    N.H.13, Thodar, Mijar - 574 225<br />
-                    Mangalore Taluk, D.K.
-                  </div>
-                )}
               </div>
             </div>
           ))}
