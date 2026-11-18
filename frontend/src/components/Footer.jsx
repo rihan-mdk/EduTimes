@@ -21,7 +21,8 @@ import {
   Clock, 
   Users, 
   Award, 
-  Cpu
+  Cpu,
+  GraduationCap
 } from 'lucide-react';
 
 export default function Footer({ variant = 'light' }) {
@@ -521,6 +522,27 @@ export default function Footer({ variant = 'light' }) {
                           </blockquote>
                           <p className="text-[10px] text-amber-700 font-bold text-right mt-1.5">
                             — Muhammed Rihan MR
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mentorship & Guidance Credit */}
+                    <div className="p-4 rounded-xl bg-gradient-to-r from-orange-50/90 via-amber-50/80 to-orange-50/90 border border-orange-200 text-slate-800 relative">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200/70 mt-0.5 shadow-xs">
+                          <GraduationCap className="w-5 h-5" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-[11px] font-bold uppercase tracking-wider text-orange-800">
+                              Faculty Mentorship & Guidance
+                            </span>
+                            <span className="text-orange-300">•</span>
+                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Acknowledgement</span>
+                          </div>
+                          <p className="text-xs text-slate-700 leading-relaxed">
+                            Developed with profound gratitude under the invaluable mentorship and esteemed guidance of <strong className="text-slate-900 font-bold">Prof. Safmeena</strong>, whose continuous support, technical insights, and constant encouragement provided the cornerstone for architecting and successfully realizing this automated institutional scheduling solution.
                           </p>
                         </div>
                       </div>
