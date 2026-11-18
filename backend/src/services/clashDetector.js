@@ -191,11 +191,51 @@ function detectClash(candidate, existingEntries, subjectsMap, timeslotsMap = nul
     }
   }
 
+  // Check 3: Non-consecutive faculty advisory warning (non-blocking for manual overrides)
+  let warning = null;
+  if (candidateFacultyId && !candidateIsGeneric && timeslotsMap) {
+    const candidateTs = timeslotsMap instanceof Map 
+      ? (timeslotsMap.get(Number(timeslot_id)) || timeslotsMap.get(String(timeslot_id)))
+      : (Array.isArray(timeslotsMap) ? timeslotsMap.find(t => String(t.id) === String(timeslot_id)) : null);
+
+    if (candidateTs) {
+      for (const entry of existingEntries) {
+        if (excludeIds.has(String(entry.id))) continue;
+        if (entry.academic_year && academic_year && entry.academic_year !== academic_year) continue;
+
+        const entryTs = timeslotsMap instanceof Map 
+          ? (timeslotsMap.get(Number(entry.timeslot_id)) || timeslotsMap.get(String(entry.timeslot_id)))
+          : (Array.isArray(timeslotsMap) ? timeslotsMap.find(t => String(t.id) === String(entry.timeslot_id)) : null);
+
+        if (!entryTs || entryTs.day !== candidateTs.day) continue;
+
+        const entrySub = getSubject(entry.subject_id);
+        const entryFacId = entry.faculty_id || (entrySub ? entrySub.faculty_id : null);
+
+        if (entryFacId && String(entryFacId) === String(candidateFacultyId)) {
+          const diff = Math.abs(entryTs.period_number - candidateTs.period_number);
+          if (diff === 1) {
+            const isSameBlock = String(entry.subject_id) === String(subject_id) && 
+              ((candidateSubject && candidateSubject.block_session_hours > 0) || (candidateSubject && candidateSubject.is_lab));
+            const isLunchBreak = Math.min(entryTs.period_number, candidateTs.period_number) === 4 && Math.max(entryTs.period_number, candidateTs.period_number) === 5;
+
+            if (!isSameBlock && !isLunchBreak) {
+              const facultyName = (candidateSubject && candidateSubject.faculty_name) || `Faculty ID #${candidateFacultyId}`;
+              warning = `Faculty advisory: ${facultyName} has a consecutive class in Period ${entryTs.period_number} on ${candidateTs.day}.`;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {
     isValid: true,
     error: null,
     clashType: null,
-    conflictingEntry: null
+    conflictingEntry: null,
+    warning
   };
 }
 

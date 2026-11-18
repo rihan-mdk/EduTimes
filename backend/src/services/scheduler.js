@@ -31,6 +31,16 @@ const DAY_ORDER = {
   'SAT': 6
 };
 
+function arePeriodsConsecutive(p1, p2, allowLunchGap = true) {
+  const diff = Math.abs(p1 - p2);
+  if (diff !== 1) return false;
+  // Period 4 (morning end) and Period 5 (afternoon start) are separated by a 50-minute Lunch Break
+  if (allowLunchGap && Math.min(p1, p2) === 4 && Math.max(p1, p2) === 5) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Solves and generates timetable entries across ALL semesters using backtracking.
  * 
@@ -44,7 +54,7 @@ const DAY_ORDER = {
  * 
  * @returns {Object} { success: boolean, schedule: Array<Object>, message: string, stats: Object }
  */
-function generateTimetable({ semesters, subjects, timeslots, academicYear, existingEntries = [], facultyBusySlots = [] }) {
+function generateTimetable({ semesters, subjects, timeslots, academicYear, existingEntries = [], facultyBusySlots = [], enforceNonConsecutive = true }) {
   const startTime = Date.now();
 
   // Create lookup maps
@@ -240,12 +250,14 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   // semesterDayLabs: Map<"semId_day", count> (tracks lab hours scheduled per semester per day)
   // departmentDayLabs: Map<"day", count> (tracks total lab hours scheduled across the entire department per day)
   // semesterDayBlocks: Map<"semId_day", count> (tracks total multi-hour blocks per semester per day)
+  // facultyDayPeriods: Map<"facId_day", Set<period_number>> (tracks period numbers taught by faculty per day)
   const facultyOccupied = new Map();
   const semesterOccupied = new Map();
   const subjectDayHours = new Map();
   const semesterDayLabs = new Map();
   const departmentDayLabs = new Map();
   const semesterDayBlocks = new Map();
+  const facultyDayPeriods = new Map();
 
   function recordAssignment(entry) {
     const sub = subjectsMap.get(entry.subject_id);
@@ -265,6 +277,12 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     if (ts) {
       const key = `${entry.semester_id}_${entry.subject_id}_${ts.day}`;
       subjectDayHours.set(key, (subjectDayHours.get(key) || 0) + 1);
+
+      if (facultyId) {
+        const facDayKey = `${facultyId}_${ts.day}`;
+        if (!facultyDayPeriods.has(facDayKey)) facultyDayPeriods.set(facDayKey, new Set());
+        facultyDayPeriods.get(facDayKey).add(ts.period_number);
+      }
 
       if (sub && sub.is_lab) {
         const labKey = `${entry.semester_id}_${ts.day}`;
@@ -302,6 +320,15 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         subjectDayHours.set(key, count - 1);
       }
 
+      if (facultyId) {
+        const facDayKey = `${facultyId}_${ts.day}`;
+        const pSet = facultyDayPeriods.get(facDayKey);
+        if (pSet) {
+          pSet.delete(ts.period_number);
+          if (pSet.size === 0) facultyDayPeriods.delete(facDayKey);
+        }
+      }
+
       if (sub && sub.is_lab) {
         const labKey = `${entry.semester_id}_${ts.day}`;
         const labCount = semesterDayLabs.get(labKey) || 0;
@@ -329,6 +356,13 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       if (slot && slot.faculty_id && slot.timeslot_id) {
         if (!facultyOccupied.has(slot.faculty_id)) facultyOccupied.set(slot.faculty_id, new Set());
         facultyOccupied.get(slot.faculty_id).add(slot.timeslot_id);
+
+        const ts = timeslotsMap.get(slot.timeslot_id);
+        if (ts) {
+          const facDayKey = `${slot.faculty_id}_${ts.day}`;
+          if (!facultyDayPeriods.has(facDayKey)) facultyDayPeriods.set(facDayKey, new Set());
+          facultyDayPeriods.get(facDayKey).add(ts.period_number);
+        }
       }
     });
   }
@@ -448,6 +482,25 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           continue;
         }
 
+        // Non-consecutive check: ensure faculty does not have an adjacent class right before or after this block
+        if (enforceNonConsecutive && demand.faculty_id) {
+          const facPeriods = facultyDayPeriods.get(`${demand.faculty_id}_${day}`);
+          if (facPeriods && facPeriods.size > 0) {
+            const startP = window[0].period_number;
+            const endP = window[window.length - 1].period_number;
+            let hasAdjacent = false;
+            for (const p of facPeriods) {
+              if (arePeriodsConsecutive(p, startP, true) || arePeriodsConsecutive(p, endP, true)) {
+                hasAdjacent = true;
+                break;
+              }
+            }
+            if (hasAdjacent) {
+              continue;
+            }
+          }
+        }
+
         // Validate all slots in consecutive window
         let windowValid = true;
         const entriesToPlace = [];
@@ -536,8 +589,25 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     // -------------------------------------------------------------
     // Branch 2: SINGLE-HOUR DEMAND
     // -------------------------------------------------------------
-    // Sort candidate timeslots dynamically: prefer days with fewer classes of this subject
+    // Sort candidate timeslots dynamically: prefer slots with no adjacent faculty classes, and days with fewer classes of this subject
     const candidateTimeslots = [...sortedTimeslots].sort((tsA, tsB) => {
+      if (enforceNonConsecutive && demand.faculty_id) {
+        const pSetA = facultyDayPeriods.get(`${demand.faculty_id}_${tsA.day}`);
+        const pSetB = facultyDayPeriods.get(`${demand.faculty_id}_${tsB.day}`);
+        let adjA = 0;
+        let adjB = 0;
+        if (pSetA) {
+          for (const p of pSetA) {
+            if (arePeriodsConsecutive(p, tsA.period_number, true)) { adjA = 1; break; }
+          }
+        }
+        if (pSetB) {
+          for (const p of pSetB) {
+            if (arePeriodsConsecutive(p, tsB.period_number, true)) { adjB = 1; break; }
+          }
+        }
+        if (adjA !== adjB) return adjA - adjB;
+      }
       if (demand.is_lab) {
         const deptLabsA = departmentDayLabs.get(tsA.day) || 0;
         const deptLabsB = departmentDayLabs.get(tsB.day) || 0;
@@ -558,6 +628,23 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
       const facSlots = facultyOccupied.get(demand.faculty_id);
       if (facSlots && facSlots.has(ts.id)) {
         continue;
+      }
+
+      // 1.1 Non-consecutive check: ensure faculty does not teach continuous hours on the same day
+      if (enforceNonConsecutive && demand.faculty_id) {
+        const facPeriods = facultyDayPeriods.get(`${demand.faculty_id}_${ts.day}`);
+        if (facPeriods && facPeriods.size > 0) {
+          let hasAdjacent = false;
+          for (const p of facPeriods) {
+            if (arePeriodsConsecutive(p, ts.period_number, true)) {
+              hasAdjacent = true;
+              break;
+            }
+          }
+          if (hasAdjacent) {
+            continue;
+          }
+        }
       }
 
       // 2. Semester busy check (with parallel activity support)
@@ -642,7 +729,42 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     return false;
   }
 
-  const isSolved = backtrack(0);
+  let isSolved = backtrack(0);
+
+  // Fallback tier: If strict non-consecutive pruning could not find a solution,
+  // gracefully retry with soft-preference heuristic so generation never fails
+  if (!isSolved && enforceNonConsecutive) {
+    enforceNonConsecutive = false;
+    currentSchedule.length = 0;
+    facultyOccupied.clear();
+    semesterOccupied.clear();
+    subjectDayHours.clear();
+    semesterDayLabs.clear();
+    departmentDayLabs.clear();
+    semesterDayBlocks.clear();
+    facultyDayPeriods.clear();
+
+    existingEntries.forEach(recordAssignment);
+    if (Array.isArray(facultyBusySlots)) {
+      facultyBusySlots.forEach(slot => {
+        if (slot && slot.faculty_id && slot.timeslot_id) {
+          if (!facultyOccupied.has(slot.faculty_id)) facultyOccupied.set(slot.faculty_id, new Set());
+          facultyOccupied.get(slot.faculty_id).add(slot.timeslot_id);
+
+          const ts = timeslotsMap.get(slot.timeslot_id);
+          if (ts) {
+            const facDayKey = `${slot.faculty_id}_${ts.day}`;
+            if (!facultyDayPeriods.has(facDayKey)) facultyDayPeriods.set(facDayKey, new Set());
+            facultyDayPeriods.get(facDayKey).add(ts.period_number);
+          }
+        }
+      });
+    }
+
+    stepsExplored = 0;
+    isSolved = backtrack(0);
+  }
+
   const durationMs = Date.now() - startTime;
 
   // Calculate total required slots across all demands and total capacity across all semesters

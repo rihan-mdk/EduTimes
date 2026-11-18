@@ -365,5 +365,40 @@ for (const entry of busyResult.schedule) {
 }
 console.log('  ✅ Faculty Busy Slots Test Passed: Faculty 5 completely avoided external commitment timeslots with 0 clashes.');
 
+// Test Non-Consecutive Theory Hours for Faculty
+console.log('🧪 Testing Non-Consecutive Theory Hours for Faculty...');
+const nonConsecutiveTimeslotsMap = new Map(aimlTimeslots.map(t => [t.id, t]));
+const facDaySlotsMap = new Map();
+aimlResult.schedule.forEach(e => {
+  if (!e.faculty_id) return;
+  const ts = nonConsecutiveTimeslotsMap.get(e.timeslot_id);
+  if (!ts) return;
+  const key = `${e.faculty_id}_${ts.day}`;
+  if (!facDaySlotsMap.has(key)) facDaySlotsMap.set(key, []);
+  facDaySlotsMap.get(key).push({ period: ts.period_number, subject_id: e.subject_id, type: e.session_type });
+});
+
+let unwantedConsecutivePairs = 0;
+for (const [key, slots] of facDaySlotsMap.entries()) {
+  slots.sort((a, b) => a.period - b.period);
+  for (let i = 0; i < slots.length - 1; i++) {
+    if (slots[i + 1].period === slots[i].period + 1) {
+      const s1 = aimlSubjects.find(s => s.id === slots[i].subject_id);
+      const isSameBlock = slots[i].subject_id === slots[i + 1].subject_id && (slots[i].type === 'lab' || (s1 && s1.block_session_hours > 0));
+      // Exclude lunch break gap (P4 to P5)
+      const isLunchBreak = slots[i].period === 4 && slots[i + 1].period === 5;
+      if (!isSameBlock && !isLunchBreak) {
+        unwantedConsecutivePairs++;
+      }
+    }
+  }
+}
+assert.strictEqual(
+  unwantedConsecutivePairs,
+  0,
+  `Violation: Found ${unwantedConsecutivePairs} unwanted consecutive theory classes for faculty!`
+);
+console.log('  ✅ Non-Consecutive Theory Hours Passed: Zero unwanted back-to-back theory classes scheduled for any faculty member.');
+
 console.log('\n🎉 All Scheduler Tests Passed!\n');
 
