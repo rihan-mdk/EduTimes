@@ -13,7 +13,6 @@ import {
   Globe, 
   Check, 
   Copy, 
-  Sparkles, 
   Database, 
   Lock, 
   BookOpen, 
@@ -60,7 +59,7 @@ export default function Footer({ variant = 'light' }) {
         <div className="max-w-[1720px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
           {/* Left: Brand & Institution */}
           <div className="flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-orange-600 to-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+            <div className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-xs">
               E
             </div>
             <div>
@@ -80,10 +79,10 @@ export default function Footer({ variant = 'light' }) {
               type="button"
               onClick={() => setActiveModal('terms')}
               className={`flex items-center gap-1.5 transition-colors cursor-pointer ${
-                isDark ? 'hover:text-orange-400 text-white/80' : 'hover:text-orange-600 text-slate-600'
+                isDark ? 'hover:text-white text-white/80' : 'hover:text-slate-900 text-slate-600'
               }`}
             >
-              <FileText className="w-3.5 h-3.5 text-orange-500" />
+              <FileText className="w-3.5 h-3.5 text-slate-400" />
               <span>Terms & Conditions</span>
             </button>
 
@@ -91,10 +90,10 @@ export default function Footer({ variant = 'light' }) {
               type="button"
               onClick={() => setActiveModal('privacy')}
               className={`flex items-center gap-1.5 transition-colors cursor-pointer ${
-                isDark ? 'hover:text-orange-400 text-white/80' : 'hover:text-orange-600 text-slate-600'
+                isDark ? 'hover:text-white text-white/80' : 'hover:text-slate-900 text-slate-600'
               }`}
             >
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <ShieldCheck className="w-3.5 h-3.5 text-slate-400" />
               <span>Privacy Policy</span>
             </button>
 
@@ -102,23 +101,23 @@ export default function Footer({ variant = 'light' }) {
               type="button"
               onClick={() => setActiveModal('help')}
               className={`flex items-center gap-1.5 transition-colors cursor-pointer ${
-                isDark ? 'hover:text-orange-400 text-white/80' : 'hover:text-orange-600 text-slate-600'
+                isDark ? 'hover:text-white text-white/80' : 'hover:text-slate-900 text-slate-600'
               }`}
             >
-              <HelpCircle className="w-3.5 h-3.5 text-sky-500" />
+              <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
               <span>Help & Guide</span>
             </button>
 
             <button
               type="button"
               onClick={() => setActiveModal('developer')}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer shadow-xs ${
                 isDark
-                  ? 'bg-orange-500/15 text-orange-300 hover:bg-orange-500/25 border border-orange-500/30'
-                  : 'bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200'
+                  ? 'bg-slate-850 text-white hover:bg-slate-800 border border-slate-700'
+                  : 'bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300'
               }`}
             >
-              <Code2 className="w-3.5 h-3.5 text-orange-600" />
+              <Code2 className="w-3.5 h-3.5 text-slate-700" />
               <span>About Developer</span>
             </button>
           </div>
@@ -146,8 +145,8 @@ export default function Footer({ variant = 'light' }) {
             >
               {/* Modal Header */}
               <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-slate-50/70">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shadow-xs">
                     {activeModal === 'terms' && <FileText className="w-4 h-4" />}
                     {activeModal === 'privacy' && <ShieldCheck className="w-4 h-4" />}
                     {activeModal === 'help' && <HelpCircle className="w-4 h-4" />}
@@ -158,7 +157,7 @@ export default function Footer({ variant = 'light' }) {
                       {activeModal === 'terms' && 'Terms and Conditions'}
                       {activeModal === 'privacy' && 'Privacy Policy & Data Protection'}
                       {activeModal === 'help' && 'EduTimes Documentation & User Guide'}
-                      {activeModal === 'developer' && 'About the Developer'}
+                      {activeModal === 'developer' && 'About Developer'}
                     </h3>
                     <p className="text-[11px] text-slate-500">
                       EduTimes Academic Suite • Yenepoya Institute of Technology
@@ -166,7 +165,7 @@ export default function Footer({ variant = 'light' }) {
                   </div>
                 </div>
 
-                {/* Tab Switcher in Header */}
+                {/* Close Button in Header */}
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
@@ -180,14 +179,14 @@ export default function Footer({ variant = 'light' }) {
               </div>
 
               {/* Quick Navigation Tabs inside modal */}
-              <div className="flex items-center gap-1 px-6 pt-3 pb-2 border-b border-slate-100 bg-white overflow-x-auto text-xs font-semibold">
+              <div className="flex items-center gap-1.5 px-6 pt-3 pb-2 border-b border-slate-100 bg-white overflow-x-auto text-xs font-medium">
                 <button
                   type="button"
                   onClick={() => setActiveModal('terms')}
                   className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                     activeModal === 'terms'
-                      ? 'bg-orange-50 text-orange-600 border border-orange-200'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      ? 'bg-slate-900 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
                   Terms & Conditions
@@ -197,8 +196,8 @@ export default function Footer({ variant = 'light' }) {
                   onClick={() => setActiveModal('privacy')}
                   className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                     activeModal === 'privacy'
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      ? 'bg-slate-900 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
                   Privacy Policy
@@ -208,8 +207,8 @@ export default function Footer({ variant = 'light' }) {
                   onClick={() => setActiveModal('help')}
                   className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                     activeModal === 'help'
-                      ? 'bg-sky-50 text-sky-600 border border-sky-200'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      ? 'bg-slate-900 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
                   Help & Guide
@@ -219,11 +218,11 @@ export default function Footer({ variant = 'light' }) {
                   onClick={() => setActiveModal('developer')}
                   className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
                     activeModal === 'developer'
-                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                      : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                      ? 'bg-slate-900 text-white font-semibold shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  About Developer (Me)
+                  About Developer
                 </button>
               </div>
 
@@ -232,9 +231,9 @@ export default function Footer({ variant = 'light' }) {
                 {/* 1. TERMS & CONDITIONS CONTENT */}
                 {activeModal === 'terms' && (
                   <div className="space-y-4">
-                    <div className="p-3.5 bg-orange-50/60 border border-orange-100 rounded-xl text-orange-900">
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800">
                       <p className="font-semibold text-xs">Academic Integrity & Official Deployment</p>
-                      <p className="text-[11px] mt-0.5 text-orange-800">
+                      <p className="text-[11px] mt-0.5 text-slate-600">
                         EduTimes is engineered as an automated conflict-free timetable scheduling and academic master data management suite for Yenepoya Institute of Technology. Use of this platform constitutes agreement with institutional operational guidelines.
                       </p>
                     </div>
@@ -280,16 +279,16 @@ export default function Footer({ variant = 'light' }) {
                 {/* 2. PRIVACY POLICY CONTENT */}
                 {activeModal === 'privacy' && (
                   <div className="space-y-4">
-                    <div className="p-3.5 bg-emerald-50/60 border border-emerald-100 rounded-xl text-emerald-900">
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800">
                       <p className="font-semibold text-xs">Real Data Handling & Protection Commitment</p>
-                      <p className="text-[11px] mt-0.5 text-emerald-800">
+                      <p className="text-[11px] mt-0.5 text-slate-600">
                         EduTimes respects your privacy and is dedicated to securing institutional data. Below is the precise disclosure of the exact information stored, processed, and maintained in this application.
                       </p>
                     </div>
 
                     <div>
                       <h4 className="font-bold text-slate-900 text-sm mb-1 flex items-center gap-1.5">
-                        <Database className="w-4 h-4 text-emerald-600" />
+                        <Database className="w-4 h-4 text-slate-700" />
                         1. Specific Data Stored by EduTimes
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 mt-2">
@@ -322,7 +321,7 @@ export default function Footer({ variant = 'light' }) {
 
                     <div>
                       <h4 className="font-bold text-slate-900 text-sm mb-1 flex items-center gap-1.5">
-                        <Lock className="w-4 h-4 text-emerald-600" />
+                        <Lock className="w-4 h-4 text-slate-700" />
                         2. Cryptographic Security & Passwords
                       </h4>
                       <p>
@@ -349,16 +348,16 @@ export default function Footer({ variant = 'light' }) {
                 {/* 3. HELP & DOCUMENTATION CONTENT */}
                 {activeModal === 'help' && (
                   <div className="space-y-4">
-                    <div className="p-3.5 bg-sky-50/60 border border-sky-100 rounded-xl text-sky-900">
+                    <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800">
                       <p className="font-semibold text-xs">EduTimes Operation & Quick Reference</p>
-                      <p className="text-[11px] mt-0.5 text-sky-800">
+                      <p className="text-[11px] mt-0.5 text-slate-600">
                         Follow this step-by-step workflow to generate clash-free institutional schedules and export official VTU-formatted timetables.
                       </p>
                     </div>
 
                     <div className="space-y-3">
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center shrink-0 text-xs">
                           1
                         </div>
                         <div>
@@ -370,7 +369,7 @@ export default function Footer({ variant = 'light' }) {
                       </div>
 
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center shrink-0 text-xs">
                           2
                         </div>
                         <div>
@@ -382,7 +381,7 @@ export default function Footer({ variant = 'light' }) {
                       </div>
 
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center shrink-0 text-xs">
                           3
                         </div>
                         <div>
@@ -394,7 +393,7 @@ export default function Footer({ variant = 'light' }) {
                       </div>
 
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center shrink-0 text-xs">
                           4
                         </div>
                         <div>
@@ -409,7 +408,7 @@ export default function Footer({ variant = 'light' }) {
                       </div>
 
                       <div className="flex gap-3">
-                        <div className="w-6 h-6 rounded-lg bg-sky-100 text-sky-700 font-bold flex items-center justify-center shrink-0 text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 text-slate-800 font-bold flex items-center justify-center shrink-0 text-xs">
                           5
                         </div>
                         <div>
@@ -423,85 +422,82 @@ export default function Footer({ variant = 'light' }) {
                   </div>
                 )}
 
-                {/* 4. ABOUT DEVELOPER (ME) CONTENT */}
+                {/* 4. ABOUT DEVELOPER CONTENT */}
                 {activeModal === 'developer' && (
-                  <div className="space-y-5">
-                    {/* Hero Card */}
-                    <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-850 to-slate-900 text-white relative overflow-hidden border border-slate-800 shadow-xl">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-                      <div className="relative z-10 flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                  <div className="space-y-4">
+                    {/* Profile Card */}
+                    <div className="p-5 rounded-xl bg-white border border-slate-200 shadow-xs">
+                      <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
                         {/* Avatar */}
-                        <div className="w-18 h-18 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 p-0.5 shadow-lg shadow-orange-500/20 shrink-0">
-                          <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center font-extrabold text-2xl text-transparent bg-clip-text bg-gradient-to-tr from-orange-400 to-amber-300">
-                            MR
-                          </div>
+                        <div className="w-14 h-14 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-lg shrink-0 tracking-tight shadow-xs">
+                          MR
                         </div>
 
                         <div className="flex-1 text-center sm:text-left">
-                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
-                            <h3 className="text-lg font-bold tracking-tight text-white">
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                            <h3 className="text-base font-bold text-slate-900">
                               Muhammed Rihan MR
                             </h3>
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                            <span className="px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
                               Full Stack Developer | AIML Student
                             </span>
                           </div>
 
-                          <p className="text-xs text-orange-200/90 font-medium">
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
                             Department of AIML, Yenepoya Institute of Technology
                           </p>
 
-                          <p className="text-xs text-slate-300 mt-2 leading-relaxed max-w-xl">
+                          <p className="text-xs text-slate-600 mt-2 leading-relaxed">
                             Passionate software engineer specializing in building modern web applications, e-commerce websites and developing solutions that improve our society.
                           </p>
 
-                          {/* Social Connect Badges */}
-                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-4">
+                          {/* Unified Clean Links */}
+                          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mt-3.5">
                             <a
                               href="https://github.com/rihan-mdk"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition cursor-pointer border border-white/10"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition cursor-pointer border border-slate-200 shadow-xs"
                             >
-                              <Github className="w-3.5 h-3.5 text-slate-300" />
+                              <Github className="w-3.5 h-3.5 text-slate-500" />
                               <span>GitHub</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              <ExternalLink className="w-2.5 h-2.5 text-slate-400" />
                             </a>
 
                             <a
                               href="https://www.linkedin.com/in/mohammad-rihan-m-r"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/40 text-blue-200 text-xs font-medium transition cursor-pointer border border-blue-500/30"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition cursor-pointer border border-slate-200 shadow-xs"
                             >
-                              <Linkedin className="w-3.5 h-3.5 text-blue-400" />
+                              <Linkedin className="w-3.5 h-3.5 text-slate-500" />
                               <span>LinkedIn</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              <ExternalLink className="w-2.5 h-2.5 text-slate-400" />
                             </a>
 
                             <a
                               href="http://rihan-s-portfolio.vercel.app/"
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600/25 hover:bg-emerald-600/35 text-emerald-200 text-xs font-medium transition cursor-pointer border border-emerald-500/30"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition cursor-pointer border border-slate-200 shadow-xs"
                             >
-                              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                              <Globe className="w-3.5 h-3.5 text-slate-500" />
                               <span>Portfolio</span>
-                              <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                              <ExternalLink className="w-2.5 h-2.5 text-slate-400" />
                             </a>
 
                             <button
                               type="button"
                               onClick={() => handleCopyEmail('rihanatwork26@gmail.com')}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600/30 hover:bg-orange-600/40 text-orange-200 text-xs font-medium transition cursor-pointer border border-orange-500/30"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition cursor-pointer border border-slate-200 shadow-xs"
                               title="Click to copy email"
                             >
-                              <Mail className="w-3.5 h-3.5 text-orange-400" />
+                              <Mail className="w-3.5 h-3.5 text-slate-500" />
                               <span>rihanatwork26@gmail.com</span>
                               {copiedEmail ? (
-                                <Check className="w-3 h-3 text-emerald-400" />
+                                <Check className="w-3 h-3 text-slate-900" />
                               ) : (
-                                <Copy className="w-3 h-3 opacity-60" />
+                                <Copy className="w-3 h-3 text-slate-400" />
                               )}
                             </button>
                           </div>
@@ -510,39 +506,34 @@ export default function Footer({ variant = 'light' }) {
                     </div>
 
                     {/* Developer Perspective / Quote */}
-                    <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 text-amber-950 relative">
-                      <div className="flex items-start gap-2.5">
-                        <Sparkles className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-[11px] font-bold uppercase tracking-wider text-amber-800 mb-1">
-                            Developer's Perspective
-                          </p>
-                          <blockquote className="italic text-xs text-amber-900 leading-relaxed font-serif">
-                            “An engineer, in my perspective, is not merely someone who solves big or complex problems. An engineer is someone who observes the world around them, identifies even the smallest inconveniences in everyday life, and takes the initiative to turn those observations into meaningful solutions. Because true engineering isn't just about solving major challenges; it's about making everyday life better.”
-                          </blockquote>
-                          <p className="text-[10px] text-amber-700 font-bold text-right mt-1.5">
-                            — Muhammed Rihan MR
-                          </p>
-                        </div>
-                      </div>
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-700">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                        Developer's Perspective
+                      </p>
+                      <blockquote className="italic text-xs text-slate-700 leading-relaxed font-serif pl-3 border-l-2 border-slate-300">
+                        “An engineer, in my perspective, is not merely someone who solves big or complex problems. An engineer is someone who observes the world around them, identifies even the smallest inconveniences in everyday life, and takes the initiative to turn those observations into meaningful solutions. Because true engineering isn't just about solving major challenges; it's about making everyday life better.”
+                      </blockquote>
+                      <p className="text-[11px] text-slate-500 font-medium text-right mt-2">
+                        — Muhammed Rihan MR
+                      </p>
                     </div>
 
                     {/* Mentorship & Guidance Credit */}
-                    <div className="p-4 rounded-xl bg-gradient-to-r from-orange-50/90 via-amber-50/80 to-orange-50/90 border border-orange-200 text-slate-800 relative">
+                    <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-700">
                       <div className="flex items-start gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-orange-500/10 text-orange-600 flex items-center justify-center shrink-0 border border-orange-200/70 mt-0.5 shadow-xs">
-                          <GraduationCap className="w-5 h-5" />
+                        <div className="w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-700 flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                          <GraduationCap className="w-4 h-4" />
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center gap-1.5 mb-1">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-orange-800">
+                            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                               Faculty Mentorship & Guidance
                             </span>
-                            <span className="text-orange-300">•</span>
-                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Acknowledgement</span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-[10px] text-slate-400 uppercase tracking-wider">Acknowledgement</span>
                           </div>
-                          <p className="text-xs text-slate-700 leading-relaxed">
-                            Developed with profound gratitude under the invaluable mentorship and esteemed guidance of <strong className="text-slate-900 font-bold">Prof. Safmeena</strong>, whose continuous support, technical insights, and constant encouragement provided the cornerstone for architecting and successfully realizing this automated institutional scheduling solution.
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            Developed with gratitude under the mentorship and guidance of <strong className="text-slate-900 font-semibold">Prof. Safmeena</strong>, whose continuous support, technical insights, and constant encouragement provided the foundation for architecting and successfully realizing this automated institutional scheduling solution.
                           </p>
                         </div>
                       </div>
@@ -550,26 +541,26 @@ export default function Footer({ variant = 'light' }) {
 
                     {/* Technical Competencies & Foundation */}
                     <div>
-                      <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                        <Cpu className="w-4 h-4 text-orange-500" />
-                        Core Engineering & Technical Skills
-                      </h4>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1.5">
+                        <Cpu className="w-3.5 h-3.5 text-slate-600" />
+                        <span>Core Technical Skills</span>
+                      </p>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
-                          <p className="text-xs font-bold text-slate-800">Python</p>
-                          <p className="text-[10px] text-slate-500">AI / ML / Scripting</p>
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                          <p className="text-xs font-semibold text-slate-800">Python</p>
+                          <p className="text-[10px] text-slate-500">AI / ML / Automation</p>
                         </div>
-                        <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
-                          <p className="text-xs font-bold text-slate-800">C Language</p>
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                          <p className="text-xs font-semibold text-slate-800">C Language</p>
                           <p className="text-[10px] text-slate-500">Systems & Logic</p>
                         </div>
-                        <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
-                          <p className="text-xs font-bold text-slate-800">Full Stack Web</p>
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                          <p className="text-xs font-semibold text-slate-800">Full Stack Web</p>
                           <p className="text-[10px] text-slate-500">React • Node • Express</p>
                         </div>
-                        <div className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-center">
-                          <p className="text-xs font-bold text-slate-800">PostgreSQL / Supabase</p>
-                          <p className="text-[10px] text-slate-500">Database & Algorithms</p>
+                        <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-center">
+                          <p className="text-xs font-semibold text-slate-800">PostgreSQL / Supabase</p>
+                          <p className="text-[10px] text-slate-500">Relational & CSP Solvers</p>
                         </div>
                       </div>
                     </div>
