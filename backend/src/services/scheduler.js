@@ -98,7 +98,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     // Ensure lab sessions strictly default to continuous 2-hour blocks if not configured
     if (isLab && (blockHours === 0 || blockCount === 0)) {
       blockHours = Math.min(2, weeklyHours);
-      blockCount = Math.floor(weeklyHours / blockHours);
+      blockCount = 1;
     }
 
     let scheduledBlockHours = 0;
@@ -127,7 +127,7 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         subject_id: subj.id,
         semester_id: subj.semester_id,
         faculty_id: subj.faculty_id,
-        is_lab: isLab,
+        is_lab: false, // Single-hour remaining sessions are lecture/tutorial periods, NOT lab blocks
         is_parallel: isParallel,
         block_hours: 1,
         academic_year: academicYear
@@ -217,14 +217,20 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   // Calculate available days and max department labs allowed per day
   const availableDays = Array.from(timeslotsByDay.keys());
   const numDays = availableDays.length || 6;
-  const totalLabDemands = blockDemands.filter(d => d.is_lab).length + singleDemands.filter(d => d.is_lab).length;
-  // If department has <= 6 labs across the week, strictly allow at most 1 lab per day across the department!
-  const maxDeptLabsPerDay = Math.max(1, Math.ceil(totalLabDemands / numDays));
+  const totalLabDemands = blockDemands.filter(d => d.is_lab).length;
+  // Dynamic department lab limit: allow multiple different department labs on the same day across different semesters
+  const maxDeptLabsPerDay = Math.max(2, Math.ceil(totalLabDemands / Math.max(1, numDays - 2)));
 
   // Pre-calculate block count per semester to evenly distribute 2-hour blocks across the week
   const semBlockCounts = new Map();
   blockDemands.forEach(d => {
     semBlockCounts.set(d.semester_id, (semBlockCounts.get(d.semester_id) || 0) + 1);
+  });
+
+  // Pre-calculate lab count per semester
+  const semLabCounts = new Map();
+  blockDemands.filter(d => d.is_lab).forEach(d => {
+    semLabCounts.set(d.semester_id, (semLabCounts.get(d.semester_id) || 0) + 1);
   });
 
   // Tracking state structures:
@@ -327,6 +333,39 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
     });
   }
 
+  // ── Feasibility Pre-checks ──────────────────────────────────────
+  // 1. Check if any semester's total demanded hours exceeds total available weekly periods
+  const semDemandedHours = new Map();
+  subjects.forEach(s => {
+    const semId = s.semester_id;
+    semDemandedHours.set(semId, (semDemandedHours.get(semId) || 0) + (Number(s.weekly_hours) || 0));
+  });
+
+  for (const [semId, totalHours] of semDemandedHours.entries()) {
+    if (totalHours > timeslots.length) {
+      const semObj = semestersMap.get(semId);
+      const semLabel = semObj ? `Semester ${semObj.number || semObj.id}` : `Semester #${semId}`;
+      return {
+        success: false,
+        schedule: [],
+        message: `${semLabel} demands ${totalHours} hours, which exceeds the total weekly capacity of ${timeslots.length} periods.`,
+        stats: { totalDemands: totalHours, totalTimeslots: timeslots.length, stepsExplored: 0, durationMs: Date.now() - startTime }
+      };
+    }
+  }
+
+  // 2. Check if any faculty member's total assigned hours exceeds total available weekly periods
+  for (const [facId, totalHours] of Object.entries(facultyTotalHours)) {
+    if (facId && facId !== 'null' && totalHours > timeslots.length) {
+      return {
+        success: false,
+        schedule: [],
+        message: `Faculty ID #${facId} is assigned ${totalHours} teaching hours across semesters, which exceeds the total weekly capacity of ${timeslots.length} periods.`,
+        stats: { totalDemands: totalHours, totalTimeslots: timeslots.length, stepsExplored: 0, durationMs: Date.now() - startTime }
+      };
+    }
+  }
+
   let stepsExplored = 0;
   const MAX_STEPS = 60000; // Search limit
 
@@ -385,14 +424,16 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
           continue;
         }
 
-        // Daily lab constraint: strictly at most 1 lab session in a day for any semester
+        // Daily lab constraint: at most 1 lab session in a day for any semester
         if (demand.is_lab) {
           const labKey = `${demand.semester_id}_${day}`;
-          if ((semesterDayLabs.get(labKey) || 0) > 0) {
+          const semTotalLabs = semLabCounts.get(demand.semester_id) || 1;
+          const maxLabsForThisSem = Math.max(1, Math.ceil(semTotalLabs / numDays));
+          if ((semesterDayLabs.get(labKey) || 0) >= maxLabsForThisSem) {
             continue;
           }
 
-          // Department-wide lab constraint: strictly at most 1 lab per day across the whole department
+          // Department-wide lab constraint
           const currentDeptLabs = departmentDayLabs.get(day) || 0;
           if (currentDeptLabs >= maxDeptLabsPerDay) {
             continue;
@@ -547,10 +588,12 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
         continue;
       }
 
-      // Daily lab constraint: strictly at most 1 lab session in a day for any semester
+      // Daily lab constraint (if single demand ever had is_lab)
       if (demand.is_lab) {
         const labKey = `${demand.semester_id}_${ts.day}`;
-        if ((semesterDayLabs.get(labKey) || 0) > 0) {
+        const semTotalLabs = semLabCounts.get(demand.semester_id) || 1;
+        const maxLabsForThisSem = Math.max(1, Math.ceil(semTotalLabs / numDays));
+        if ((semesterDayLabs.get(labKey) || 0) >= maxLabsForThisSem) {
           continue;
         }
 
@@ -602,16 +645,18 @@ function generateTimetable({ semesters, subjects, timeslots, academicYear, exist
   const isSolved = backtrack(0);
   const durationMs = Date.now() - startTime;
 
-  // Calculate total required slots across all demands
+  // Calculate total required slots across all demands and total capacity across all semesters
   const totalSlotsDemanded = slotDemands.reduce((sum, d) => sum + d.block_hours, 0);
+  const totalCapacity = timeslots.length * (semesters.length || 1);
 
   if (!isSolved) {
     return {
       success: false,
       schedule: [],
-      message: `Could not generate a clash-free schedule with the current constraints (Total demands: ${totalSlotsDemanded} hours across ${semesters.length} semesters, Available slots: ${timeslots.length}).`,
+      message: `Could not generate a clash-free schedule with current constraints (Total demands: ${totalSlotsDemanded} hours across ${semesters.length} semesters, Total available semester capacity: ${totalCapacity} hours [${timeslots.length} slots/week per semester]).`,
       stats: {
         totalDemands: totalSlotsDemanded,
+        totalCapacity,
         totalTimeslots: timeslots.length,
         stepsExplored,
         durationMs

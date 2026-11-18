@@ -180,7 +180,9 @@ export default function AdminMasterData() {
         weekly_hours: 4,
         is_lab: false,
         is_parallel_activity: false,
-        is_generic_activity: false
+        is_generic_activity: false,
+        block_session_hours: 0,
+        block_session_count: 0
       });
     }
     if (activeSubTab === 'timeslots') setFormData({ day: 'Monday', period_number: 1, start_time: '09:00:00', end_time: '09:55:00' });
@@ -196,7 +198,18 @@ export default function AdminMasterData() {
     if (activeSubTab === 'subjects') {
       const isGeneric = Boolean(item.is_generic_activity);
       setSubjectModalMode(isGeneric ? 'activity' : 'subject');
-      setFormData({ subject_code: item.subject_code, name: item.name, semester_id: item.semester_id, faculty_id: item.faculty_id || '', weekly_hours: item.weekly_hours, is_lab: item.is_lab || false, is_parallel_activity: Boolean(item.is_parallel_activity), is_generic_activity: isGeneric });
+      setFormData({
+        subject_code: item.subject_code,
+        name: item.name,
+        semester_id: item.semester_id,
+        faculty_id: item.faculty_id || '',
+        weekly_hours: item.weekly_hours,
+        is_lab: item.is_lab || false,
+        is_parallel_activity: Boolean(item.is_parallel_activity),
+        is_generic_activity: isGeneric,
+        block_session_hours: item.block_session_hours || 0,
+        block_session_count: item.block_session_count || 0
+      });
     }
     if (activeSubTab === 'timeslots') setFormData({ day: item.day, period_number: item.period_number, start_time: item.start_time, end_time: item.end_time });
     setIsModalOpen(true);
@@ -580,6 +593,11 @@ export default function AdminMasterData() {
                                     {sub.is_parallel_activity && (
                                       <span className="ml-1.5 inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-purple-100 text-purple-800">
                                         PARALLEL
+                                      </span>
+                                    )}
+                                    {Number(sub.block_session_count) > 0 && Number(sub.block_session_hours) > 0 && (
+                                      <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-amber-50 text-amber-900 border border-amber-200" title={`Continuous session: ${sub.block_session_count} block(s) of ${sub.block_session_hours} hours`}>
+                                        BLOCK {sub.block_session_count}×{sub.block_session_hours}h
                                       </span>
                                     )}
                                   </td>
@@ -1498,13 +1516,62 @@ export default function AdminMasterData() {
                         <input
                           type="checkbox"
                           checked={formData.is_lab || false}
-                          onChange={(e) => setFormData({ ...formData, is_lab: e.target.checked })}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormData(prev => ({
+                              ...prev,
+                              is_lab: checked,
+                              block_session_hours: checked && (!prev.block_session_hours || prev.block_session_hours === 0) ? 2 : prev.block_session_hours,
+                              block_session_count: checked && (!prev.block_session_count || prev.block_session_count === 0) ? 1 : prev.block_session_count
+                            }));
+                          }}
                           className="w-4 h-4 text-orange-500 rounded border-slate-300 focus:ring-orange-400"
                         />
                         Is Laboratory Session?
                       </label>
                     </div>
                   </div>
+
+                  {/* Continuous Block Session Configuration */}
+                  <div className="bg-slate-50 border border-slate-200/90 rounded-xl p-3 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">Continuous Block Session</span>
+                      <span className="text-[11px] text-slate-400">Optional (e.g. 2h Lab or Project)</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Block Length</label>
+                        <select
+                          value={formData.block_session_hours || 0}
+                          onChange={(e) => setFormData({ ...formData, block_session_hours: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-orange-400 outline-none"
+                        >
+                          <option value="0">None (Individual 1-Hour classes)</option>
+                          <option value="2">2 Hours Continuous Block</option>
+                          <option value="3">3 Hours Continuous Block</option>
+                          <option value="4">4 Hours Continuous Block</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-slate-600 mb-1">Blocks per Week</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="5"
+                          value={formData.block_session_count !== undefined ? formData.block_session_count : 0}
+                          onChange={(e) => setFormData({ ...formData, block_session_count: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-orange-400 outline-none"
+                          placeholder="e.g. 1"
+                        />
+                      </div>
+                    </div>
+                    {Number(formData.block_session_hours) > 0 && Number(formData.block_session_count) > 0 && (
+                      <p className="text-[11px] text-slate-500 leading-normal">
+                        Schedules {formData.block_session_count} block(s) of {formData.block_session_hours}h ({formData.block_session_count * formData.block_session_hours}h total). The remaining {Math.max(0, (Number(formData.weekly_hours) || 0) - (formData.block_session_count * formData.block_session_hours))}h will be regular 1-hour lecture slots.
+                      </p>
+                    )}
+                  </div>
+
                   {/* Parallel activity flag */}
                   <div className="pt-1 border-t border-slate-100">
                     <label className="inline-flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700">
