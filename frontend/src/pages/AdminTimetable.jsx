@@ -1531,7 +1531,28 @@ export default function AdminTimetable({ onNavigateToMasterData }) {
   </tr>
 </table>
 
-<p style="font-size:7pt;color:#777777;text-align:right;margin-top:10pt;margin-bottom:0;font-family:'Times New Roman',serif;">Generated on ${todayStr}</p>
+<!-- 3. Official Signatures Section -->
+<table cellspacing="0" cellpadding="0" style="width:100%;margin-top:42pt;border-collapse:collapse;border:none;page-break-inside:avoid;">
+  <tr style="page-break-inside:avoid;">
+    <td style="width:33%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
+      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;font-family:'Times New Roman',serif;">
+        Time Table Co-ordinator
+      </div>
+    </td>
+    <td style="width:34%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
+      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;font-family:'Times New Roman',serif;">
+        HOD
+      </div>
+    </td>
+    <td style="width:33%;text-align:center;vertical-align:top;border:none;padding:0 8pt;">
+      <div style="border-top:1.0pt solid #000;mso-border-top-alt:solid #000 1.0pt;display:inline-block;min-width:140pt;padding-top:3pt;font-weight:bold;font-size:9.5pt;font-family:'Times New Roman',serif;">
+        Principal
+      </div>
+    </td>
+  </tr>
+</table>
+
+<p style="font-size:7pt;color:#777777;text-align:right;margin-top:8pt;margin-bottom:0;font-family:'Times New Roman',serif;">Generated on ${todayStr}</p>
 
 </div>
 </body>
@@ -3060,10 +3081,10 @@ export default function AdminTimetable({ onNavigateToMasterData }) {
         })()}
 
         {/* 6. Signature Section */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', paddingTop: '28px' }}>
-          {['Time Table Coordinator', 'Head of the Department', 'Principal'].map((label) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', paddingTop: '42px' }}>
+          {['Time Table Co-ordinator', 'HOD', 'Principal'].map((label) => (
             <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ height: '28px' }} />
+              <div style={{ height: '32px' }} />
               <div style={{ borderTop: '1px solid #000', minWidth: '180px', paddingTop: '3px', fontFamily: "'Times New Roman', Times, serif", fontWeight: 'bold', fontSize: '10px' }}>
                 <div>{label}</div>
               </div>
