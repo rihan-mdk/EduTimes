@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../api';
+import Footer from '../components/Footer';
 import { Lock, User, Loader2, AlertCircle, Calendar, Building2, ArrowLeft, Plus, Eye, EyeOff } from 'lucide-react';
 
 export default function Login({ onLoginSuccess }) {
@@ -118,7 +119,7 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center relative">
+    <div className="min-h-screen bg-slate-950 flex flex-col justify-between relative">
       {/* Hidden image preloader — triggers fade-in once background is ready */}
       <img
         src="/login-bg.webp"
@@ -143,8 +144,9 @@ export default function Login({ onLoginSuccess }) {
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/50" />
 
-      {/* Glassmorphism Card */}
-      <div className="relative z-10 w-full max-w-md mx-4">
+      {/* Glassmorphism Card Container */}
+      <div className="flex-1 flex items-center justify-center relative z-10 w-full px-4 py-8">
+        <div className="w-full max-w-md">
         <div
           className="rounded-3xl px-8 py-10 shadow-2xl"
           style={{
@@ -408,6 +410,12 @@ export default function Login({ onLoginSuccess }) {
             </>
           )}
         </div>
+        </div>
+      </div>
+
+      {/* Global Footer on Login */}
+      <div className="relative z-10 w-full">
+        <Footer variant="glass" />
       </div>
     </div>
   );

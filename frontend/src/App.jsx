@@ -6,6 +6,7 @@ import AdminTimetable from './pages/AdminTimetable';
 import AdminMasterData from './pages/AdminMasterData';
 import FacultyDashboard from './pages/FacultyDashboard';
 import SplashScreen from './components/SplashScreen';
+import Footer from './components/Footer';
 import DebugPanel from './components/DebugPanel';
 import { Loader2 } from 'lucide-react';
 
@@ -59,6 +60,9 @@ export default function App() {
           <FacultyDashboard />
         )}
       </main>
+
+      {/* Global Application Footer */}
+      <Footer variant="light" />
 
       {/* Developer Debug Panel (Toggle with Ctrl + D) */}
       <DebugPanel />
